@@ -1,0 +1,46 @@
+# Dependencies and generated builds
+node_modules/
+dist/
+target/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Local environment configuration (keep safe templates)
+.env
+.env.*
+*.env
+!.env.example
+!.env.*.example
+
+# Firebase Admin credentials and private keys
+*service-account*.json
+*serviceAccount*.json
+*firebase-adminsdk*.json
+*.pem
+*.key
+.firebase/
+
+# Logs, JVM crash dumps, and temporary files
+*.log
+*.log.*
+hs_err_pid*
+replay_pid*
+*.hprof
+*.jfr
+*.tmp
+*.swp
+*.swo
+
+# Browser test artifacts
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Machine-local editor and OS files
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
