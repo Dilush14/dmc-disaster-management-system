@@ -1,0 +1,27 @@
+/* Shared design tokens for staff and public experiences. */
+:root {
+  --dmc-primary: #0863d6;
+  --dmc-primary-hover: #0754b7;
+  --dmc-navy: #0b1938;
+  --dmc-muted: #526b91;
+  --dmc-surface: #ffffff;
+  --dmc-background: #f5f8fd;
+  --dmc-border: #dce5f1;
+  --dmc-primary-soft: #e6f0ff;
+  --dmc-danger: #cf2636;
+  --dmc-success: #008c4f;
+}
+/* Preserve staff geometry and transitions while sharing the public palette. */
+.portal { --navy: var(--dmc-navy); --red: var(--dmc-primary); --muted: var(--dmc-muted); }
+.portal .navbar { background: #f9fbfffa; }
+.portal .brand-mark { background: var(--dmc-primary); }
+.portal .hero-copy h1 em { color: #8ec7ff; }
+.portal .auth-tabs .selected, .portal .primary, .portal .primary.red { background: var(--dmc-primary); }
+.portal .primary:hover, .portal .primary.red:hover { background: var(--dmc-primary-hover); }
+.portal .auth-tabs .selected { border-bottom-color: #79bdff; }
+.portal .switch-prompt button { color: var(--dmc-primary); border-color: var(--dmc-primary); }
+.portal .welcome-card > svg { color: #82bdff; }
+.portal .feature-shortcuts button:first-child svg { color: #8ec7ff; }
+.portal .input-wrap, .portal .social-buttons button { border-color: var(--dmc-border); }
+.portal .field-error { color: var(--dmc-danger); }
+.app-loading { min-height: 100svh; display: grid; place-items: center; background: var(--dmc-background); color: var(--dmc-primary); }

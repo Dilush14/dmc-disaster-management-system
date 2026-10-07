@@ -8,7 +8,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
+@SpringBootTest(properties = "app.firebase.enabled=false")
 @AutoConfigureMockMvc
 class DmcApplicationTests {
     @Autowired MockMvc mvc;
@@ -17,6 +17,10 @@ class DmcApplicationTests {
     }
     @Test void unknownApiIsDenied() throws Exception {
         mvc.perform(get("/api/incidents")).andExpect(status().isUnauthorized());
+    }
+    @Test void disabledFirebaseCannotAcceptBearerTokens() throws Exception {
+        mvc.perform(get("/api/public/profile").header("Authorization", "Bearer not-a-real-token"))
+            .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.message").exists());
     }
     @Test void configuredOriginIsAllowed() throws Exception {
         mvc.perform(options("/api/health").header("Origin", "http://localhost:5173")

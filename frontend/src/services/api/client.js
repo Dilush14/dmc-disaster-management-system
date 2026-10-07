@@ -4,3 +4,4 @@ export async function getHealth({ signal } = {}) {
   if (!response.ok) throw new Error(`Health request failed (${response.status}).`);
   return response.json();
 }
+export { baseUrl };
