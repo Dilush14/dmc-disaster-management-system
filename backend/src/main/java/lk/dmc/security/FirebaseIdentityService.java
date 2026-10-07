@@ -13,7 +13,8 @@ public class FirebaseIdentityService {
     private final FirebaseGateway firebase;
     private final PublicProfileRepository profiles;
     public FirebaseIdentityService(FirebaseGateway firebase, PublicProfileRepository profiles) {
-        this.firebase = firebase; this.profiles = profiles;
+        this.firebase = firebase;
+        this.profiles = profiles;
     }
     public PublicIdentity verify(String token) {
         try {
@@ -24,7 +25,8 @@ public class FirebaseIdentityService {
                 var profile = profiles.find(decoded.getUid());
                 role = profile == null ? "CITIZEN" : (String) profile.get("role");
             }
-            if (role == null) role = "DENIED";
+            if (role == null)
+                role = "DENIED";
             return new PublicIdentity(decoded.getUid(), decoded.getEmail(), decoded.getName(), role);
         } catch (FirebaseAuthException error) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Your session is invalid or expired. Please log in again.");

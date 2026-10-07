@@ -14,14 +14,23 @@ import org.springframework.web.server.ResponseStatusException;
 @Component
 public class FirebaseGateway {
     private final ObjectProvider<FirebaseApp> apps;
-    public FirebaseGateway(ObjectProvider<FirebaseApp> apps) { this.apps = apps; }
+    public FirebaseGateway(ObjectProvider<FirebaseApp> apps) {
+        this.apps = apps;
+    }
     private FirebaseApp app() {
         FirebaseApp app = apps.getIfAvailable();
-        if (app == null) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+        if (app == null)
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
             "Firebase is not configured on the server. Please contact the administrator.");
         return app;
     }
-    public FirebaseAuth auth() { return FirebaseAuth.getInstance(app()); }
-    public Firestore firestore() { return FirestoreClient.getFirestore(app()); }
-    public Bucket bucket() { return StorageClient.getInstance(app()).bucket(); }
+    public FirebaseAuth auth() {
+        return FirebaseAuth.getInstance(app());
+    }
+    public Firestore firestore() {
+        return FirestoreClient.getFirestore(app());
+    }
+    public Bucket bucket() {
+        return StorageClient.getInstance(app()).bucket();
+    }
 }

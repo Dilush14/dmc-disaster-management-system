@@ -32,13 +32,13 @@ public class SecurityConfig {
             .addFilterBefore(new FirebaseAuthenticationFilter(identities, json), UsernamePasswordAuthenticationFilter.class)
             .exceptionHandling(errors -> errors
                 .authenticationEntryPoint((request, response, error) -> {
-                    response.setStatus(401); response.setContentType("application/json");
+            response.setStatus(401); response.setContentType("application/json");
                     json.writeValue(response.getOutputStream(), Map.of("message", "Please log in to continue."));
-                })
+        })
                 .accessDeniedHandler((request, response, error) -> {
-                    response.setStatus(403); response.setContentType("application/json");
+            response.setStatus(403); response.setContentType("application/json");
                     json.writeValue(response.getOutputStream(), Map.of("message", "This account cannot access public reporting."));
-                }))
+        }))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
                 .requestMatchers("/api/public/**").hasAnyRole("CITIZEN", "COMMUNITY_VOLUNTEER")
