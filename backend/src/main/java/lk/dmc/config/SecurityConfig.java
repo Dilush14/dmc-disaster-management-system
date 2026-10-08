@@ -37,10 +37,15 @@ public class SecurityConfig {
         })
                 .accessDeniedHandler((request, response, error) -> {
             response.setStatus(403); response.setContentType("application/json");
-                    json.writeValue(response.getOutputStream(), Map.of("message", "This account cannot access public reporting."));
+            json.writeValue(response.getOutputStream(), Map.of("message",
+                request.getRequestURI().startsWith("/api/staff/")
+                    ? "A DMC Officer, District Officer or Response Team Member account is required."
+                    : "This account cannot access public reporting."));
         }))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/staff/registration").authenticated()
+                .requestMatchers("/api/staff/**").hasAnyRole("DMC_OFFICER", "DISTRICT_OFFICER", "RESPONSE_TEAM_MEMBER")
                 .requestMatchers("/api/public/**").hasAnyRole("CITIZEN", "COMMUNITY_VOLUNTEER")
                 .anyRequest().denyAll())
             .build();

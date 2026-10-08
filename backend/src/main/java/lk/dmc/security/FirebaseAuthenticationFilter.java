@@ -25,7 +25,8 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI().substring(request.getContextPath().length());
-        return !path.startsWith("/api/public/") || "OPTIONS".equals(request.getMethod());
+        return !(path.startsWith("/api/public/") || path.startsWith("/api/staff/"))
+            || "OPTIONS".equals(request.getMethod());
     }
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
