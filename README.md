@@ -1,8 +1,8 @@
 # DMC - Smart Disaster Early-Warning and Emergency Coordination System
 
-University project for Sri Lanka using React/Vite, Spring Boot and Firebase. The public reporting portal at `/public` includes authenticated signup/login, hazard reporting, optional private photos and My Reports. Existing welcome/staff pages at `/` and `/auth` share its blue theme; staff authentication remains validation-only.
+University project for Sri Lanka using React/Vite, Spring Boot and Firebase. The public reporting portal at `/public` serves Citizens and Community Volunteers. The desktop `/auth` forms serve DMC Officers, District Officers and Response Team Members, using Firebase authentication and the staff backend API before opening `/staff/monitoring`. For this university demo, staff registration immediately activates the selected role.
 
-The public frontend is wired to authenticated Spring APIs backed by Firebase Auth, Firestore and Storage. A Firebase project has not been configured yet. Follow [Firebase setup](FIREBASE_SETUP.md) to enable live accounts and persistence. UI preview labels and local fake sessions/reports have been removed.
+The frontend is wired to authenticated Spring APIs backed by Firebase Auth, Firestore and Storage. Live requests require Firebase to be enabled and server credentials configured. See [authentication connection](AUTH_CONNECTION.md) for the request flow and configuration requirements. UI preview labels and local fake sessions/reports have been removed.
 
 ## Run locally
 

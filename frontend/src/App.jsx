@@ -6,6 +6,7 @@ import InfoDialog from './components/common/InfoDialog';
 import WelcomePage from './pages/public/WelcomePage';
 import AuthPage from './pages/auth/AuthPage';
 const PublicRoutes = lazy(() => import('./routes/PublicRoutes'));
+const StaffRoutes = lazy(() => import('./routes/StaffRoutes'));
 function StaffPortal() {
   const [topic, setTopic] = useState('');
   return <div className="portal">
@@ -30,6 +31,7 @@ export default function App() {
   return <Suspense fallback={<p role="status" className="app-loading">Loading DMC…</p>}>
     <Routes>
       <Route path="/public/*" element={<PublicRoutes/>}/>
+      <Route path="/staff/*" element={<StaffRoutes/>}/>
       <Route path="*" element={<StaffPortal/>}/>
     </Routes>
   </Suspense>;
