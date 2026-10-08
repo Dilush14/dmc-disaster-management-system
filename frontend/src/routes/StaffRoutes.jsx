@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { NavLink, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import { isStaffRole, observeStaffAuth, logoutStaff } from '../services/firebase/staffAuthService';
+import { registrationRoles } from '../utils/validation';
 import { Activity, BarChart3, Bell, FileText, House, LayoutDashboard, MapPinned, Search, Settings, Users } from 'lucide-react';
 import MonitoringDashboardPage from '../features/monitoring-reports/pages/MonitoringDashboardPage';
 import DistrictResponseOverviewPage from '../features/monitoring-reports/pages/DistrictResponseOverviewPage';
@@ -24,16 +26,30 @@ const navItems = [
   { to: '/staff/settings', label: 'Settings', icon: Settings },
 ];
 
-function RequireStaffRole() {
-  const role = typeof window !== 'undefined' ? (localStorage.getItem('dmcStaffRole') || 'DMC_OFFICER') : 'DMC_OFFICER';
-  const allowedRoles = ['DMC_OFFICER', 'DISTRICT_OFFICER', 'NGO_OFFICER'];
+const StaffSessionContext = createContext(null);
 
-  if (!allowedRoles.includes(role)) {
+function StaffSessionProvider({ children }) {
+  const [session, setSession] = useState({ user: null, loading: true, error: '' });
+  useEffect(() => observeStaffAuth(
+    user => setSession({ user, loading: false, error: '' }),
+    error => setSession({ user: null, loading: false, error: error.message }),
+  ), []);
+  return <StaffSessionContext.Provider value={session}>{children}</StaffSessionContext.Provider>;
+}
+
+function RequireStaffRole() {
+  const { user, loading, error } = useContext(StaffSessionContext);
+  if (loading) return <p role="status" className="p-6">Loading staff session…</p>;
+  if (!user && !error) return <Navigate to="/auth" replace />;
+
+  if (!user || !isStaffRole(user.role)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100 p-6 text-slate-900">
         <div className="max-w-md rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
           <h1 className="text-2xl font-black">Access restricted</h1>
           <p className="mt-3 text-slate-600">This monitoring and reporting portal is for authorized DMC staff users.</p>
+          {error && <p role="alert" className="mt-3 text-red-700">{error}</p>}
+          <Link className="mt-4 inline-block text-blue-700" to="/auth">Back to staff login</Link>
         </div>
       </div>
     );
@@ -44,6 +60,16 @@ function RequireStaffRole() {
 
 function StaffLayout() {
   const location = useLocation();
+  const { user } = useContext(StaffSessionContext);
+  const [logoutError, setLogoutError] = useState('');
+  const roleLabel = Object.entries(registrationRoles).find(([, role]) => role === user.role)?.[0];
+  async function logout() {
+    try {
+      await logoutStaff();
+    } catch {
+      setLogoutError('Unable to sign out. Please try again.');
+    }
+  }
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -90,14 +116,16 @@ function StaffLayout() {
                 <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-800">DO</div>
                   <div>
-                    <div className="text-sm font-bold text-slate-800">DMC Officer</div>
-                    <div className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Officer</div>
+                    <div className="text-sm font-bold text-slate-800">{user.name || user.email}</div>
+                    <div className="text-[11px] uppercase tracking-[0.12em] text-slate-500">{roleLabel}</div>
                   </div>
                 </div>
+                <button type="button" onClick={logout} className="text-sm text-blue-700">Sign out</button>
               </div>
             </div>
           </header>
           <main className="p-6">
+            {logoutError && <p role="alert">{logoutError}</p>}
             <Outlet />
           </main>
         </div>
@@ -108,6 +136,7 @@ function StaffLayout() {
 
 export default function StaffRoutes() {
   return (
+    <StaffSessionProvider>
     <ReportGenerationProvider>
       <Routes>
         <Route element={<RequireStaffRole />}>
@@ -128,5 +157,6 @@ export default function StaffRoutes() {
         </Route>
       </Routes>
     </ReportGenerationProvider>
+    </StaffSessionProvider>
   );
 }
