@@ -36,6 +36,10 @@ public class HazardWarningService {
         return result;
     }
 
+    public java.util.List<Map<String, Object>> findAll() {
+        return warnings.findAll();
+    }
+
     private boolean matches(Map<String, Object> item, String search, String status, String type, String severity) {
         String query = search == null ? "" : search.trim().toLowerCase();
         String text = String.valueOf(item.getOrDefault("id", "")) + " "

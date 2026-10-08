@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import MonitoringStatCard from '../components/MonitoringStatCard';
 import MonitoringTabs from '../components/MonitoringTabs';
 import SituationMap from '../components/SituationMap';
-import { getDistrictResponse } from '../utils/monitoringReports';
+import DataSourceNotice from '../components/DataSourceNotice';
+import useMonitoringData from '../hooks/useMonitoringData';
+import { monitoringService } from '../services/monitoringService';
 
 const districtList = ['Colombo', 'Gampaha', 'Kandy', 'Matara'];
 const tabs = ['Overview', 'Warnings', 'Reports', 'Shelters', 'Teams', 'Resources'];
@@ -12,10 +14,18 @@ export default function DistrictResponseOverviewPage() {
   const { district: districtParam } = useParams();
   const [district, setDistrict] = useState(districtParam || 'Colombo');
   const [activeTab, setActiveTab] = useState('Overview');
-  const response = getDistrictResponse(district);
+  useEffect(() => setDistrict(districtParam || 'Colombo'), [districtParam]);
+  const { data: response, loading, error, source, notice } = useMonitoringData(
+    () => monitoringService.getDistrictResponse(district), district,
+  );
+
+  if (loading || error || !response) {
+    return <div className="space-y-5"><h1 className="text-3xl font-black text-slate-900">District Response Overview</h1><DataSourceNotice loading={loading} error={error} /></div>;
+  }
 
   return (
     <div className="space-y-6">
+      <DataSourceNotice source={source} notice={notice} />
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Monitoring & Reports</div>
@@ -33,7 +43,7 @@ export default function DistrictResponseOverviewPage() {
         <MonitoringStatCard title="Active Warnings" value={response.summary.activeWarnings} accent="red" detail="Live monitors" />
         <MonitoringStatCard title="Verified Reports" value={response.summary.verifiedReports} accent="green" detail="Field validation" />
         <MonitoringStatCard title="Active Shelters" value={response.summary.activeShelters} accent="blue" detail="Operational sites" />
-        <MonitoringStatCard title="Affected Population" value={response.summary.affectedPopulation.toLocaleString()} accent="amber" detail="Estimated at-risk" />
+        <MonitoringStatCard title="Affected Population" value={Number(response.summary.affectedPopulation || 0).toLocaleString()} accent="amber" detail="Estimated at-risk" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,.8fr)]">
@@ -54,33 +64,40 @@ export default function DistrictResponseOverviewPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="mb-4 text-lg font-bold text-slate-800">Ongoing Incidents</h3>
-        <div className="overflow-hidden rounded-xl border border-slate-200">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-100 text-slate-700">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Type</th>
-                <th className="px-4 py-3 font-semibold">Location</th>
-                <th className="px-4 py-3 font-semibold">Severity</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Reported On</th>
-              </tr>
-            </thead>
-            <tbody>
-              {response.incidents.map((incident, index) => (
-                <tr key={`${incident.type}-${index}`} className="border-t border-slate-200">
-                  <td className="px-4 py-3 font-medium text-slate-800">{incident.type}</td>
-                  <td className="px-4 py-3 text-slate-600">{incident.location}</td>
-                  <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${incident.severity === 'High' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{incident.severity}</span></td>
-                  <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${incident.status === 'Critical' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>{incident.status}</span></td>
-                  <td className="px-4 py-3 text-slate-600">{incident.reportedOn}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DistrictTabContent tab={activeTab} response={response} />
     </div>
   );
+}
+
+function DistrictTabContent({ tab, response }) {
+  if (tab === 'Overview') {
+    return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><h3 className="mb-4 text-lg font-bold text-slate-800">Ongoing Incidents</h3><DataTable rows={response.incidents || []} columns={[
+      ['type', 'Type'], ['location', 'Location'], ['severity', 'Severity'], ['status', 'Status'], ['reportedOn', 'Reported On'],
+    ]} empty="No ongoing incidents are available for this district." /></div>;
+  }
+
+  const config = {
+    Warnings: { title: 'Hazard Warnings', rows: response.hazardWarnings || response.warningHistory || [], columns: [['title', 'Warning'], ['type', 'Type'], ['severity', 'Severity'], ['status', 'Status'], ['createdAt', 'Issued']] },
+    Reports: { title: 'Verified Hazard Reports', rows: response.hazardReports || [], columns: [['reportId', 'Report ID'], ['hazardType', 'Hazard'], ['status', 'Status'], ['submittedAt', 'Submitted']] },
+    Shelters: { title: 'Shelter Status', rows: response.shelters || [], columns: [['name', 'Shelter'], ['capacity', 'Capacity'], ['occupied', 'Occupied'], ['status', 'Status']] },
+    Teams: { title: 'Response Teams', rows: response.teams || [], columns: [['name', 'Team'], ['teamType', 'Team Type'], ['status', 'Status'], ['assignedAt', 'Updated']] },
+    Resources: { title: 'Resource Availability', rows: response.resources || [], columns: [['resourceType', 'Resource'], ['quantity', 'Quantity'], ['status', 'Status'], ['organization', 'Organization']] },
+  }[tab];
+
+  return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><h3 className="mb-4 text-lg font-bold text-slate-800">{config.title}</h3><DataTable rows={config.rows} columns={config.columns} empty={`No ${tab.toLowerCase()} records are available for this district.`} /></div>;
+}
+
+function DataTable({ rows, columns, empty }) {
+  if (!rows.length) return <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">{empty}</p>;
+  return <div className="overflow-x-auto rounded-xl border border-slate-200"><table className="min-w-full text-left text-sm"><thead className="bg-slate-100 text-slate-700"><tr>{columns.map(([, label]) => <th key={label} className="px-4 py-3 font-semibold">{label}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={row.id || row.reportId || `${tabularName(row, columns)}-${index}`} className="border-t border-slate-200">{columns.map(([key]) => <td key={key} className="max-w-xs truncate px-4 py-3 text-slate-700">{formatCell(row[key])}</td>)}</tr>)}</tbody></table></div>;
+}
+
+function tabularName(row, columns) {
+  return String(row[columns[0]?.[0]] || 'record');
+}
+
+function formatCell(value) {
+  if (value == null || value === '') return '—';
+  if (Array.isArray(value)) return value.join(', ');
+  return String(value).replaceAll('_', ' ');
 }

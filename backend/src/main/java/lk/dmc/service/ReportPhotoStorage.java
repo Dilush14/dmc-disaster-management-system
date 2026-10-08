@@ -9,6 +9,8 @@ import java.net.URI;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -18,6 +20,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class ReportPhotoStorage {
     private static final Logger log = LoggerFactory.getLogger(ReportPhotoStorage.class);
     private final Cloudinary cloudinary;
+
+    @Autowired
+    public ReportPhotoStorage(ObjectProvider<Cloudinary> cloudinaryProvider) {
+        this.cloudinary = cloudinaryProvider.getIfAvailable();
+    }
 
     public ReportPhotoStorage(Cloudinary cloudinary) {
         this.cloudinary = cloudinary;
@@ -57,7 +64,7 @@ public class ReportPhotoStorage {
 
     public void upload(String path, Photo photo) {
         try {
-            cloudinary.uploader().upload(photo.bytes(), ObjectUtils.asMap(
+            cloudinary().uploader().upload(photo.bytes(), ObjectUtils.asMap(
                 "public_id", path,
                 "resource_type", "image",
                 "overwrite", false,
@@ -72,7 +79,7 @@ public class ReportPhotoStorage {
     public Photo download(String path) {
         HttpURLConnection connection = null;
         try {
-            String url = cloudinary.url().secure(true).resourceType("image").publicId(path).generate();
+            String url = cloudinary().url().secure(true).resourceType("image").publicId(path).generate();
             connection = (HttpURLConnection) URI.create(url).toURL().openConnection();
             connection.setConnectTimeout(10_000);
             connection.setReadTimeout(20_000);
@@ -97,7 +104,7 @@ public class ReportPhotoStorage {
         if (path == null)
             return;
         try {
-            cloudinary.uploader().destroy(path, ObjectUtils.asMap("resource_type", "image", "type", "upload"));
+            cloudinary().uploader().destroy(path, ObjectUtils.asMap("resource_type", "image", "type", "upload"));
         } catch (IOException | RuntimeException error) {
             log.warn("Unable to delete orphaned Cloudinary photo {}", path, error);
         }
@@ -106,5 +113,12 @@ public class ReportPhotoStorage {
     private ResponseStatusException invalidPhoto() {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST,
             "Choose a valid JPEG or PNG image up to 20 megapixels.");
+    }
+
+    private Cloudinary cloudinary() {
+        if (cloudinary == null)
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                "Photo storage is not configured on the server.");
+        return cloudinary;
     }
 }

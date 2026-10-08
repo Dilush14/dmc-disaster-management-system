@@ -1,4 +1,4 @@
-export default function ShelterStatusTable({ shelters = [] }) {
+export default function ShelterStatusTable({ shelters = [], onView }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <table className="min-w-full text-left text-sm">
@@ -25,7 +25,7 @@ export default function ShelterStatusTable({ shelters = [] }) {
                 </span>
               </td>
               <td className="px-4 py-3">
-                <button type="button" className="text-sm font-medium text-blue-700 hover:text-blue-900">View on Map</button>
+                <button type="button" onClick={() => onView?.(shelter)} className="text-sm font-medium text-blue-700 hover:text-blue-900">View on Map</button>
               </td>
             </tr>
           ))}
