@@ -6,8 +6,6 @@ export const features = [
   { name: 'Response Coordination', icon: ChartNoAxesColumnIncreasing },
 ];
 export const roles = [
-  'Citizen',
-  'Community Disaster Volunteer',
   'DMC Officer',
   'District Officer',
   'Response Team Member'
