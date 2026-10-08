@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { isStaffRole, observeStaffAuth, logoutStaff } from '../services/firebase/staffAuthService';
 import { registrationRoles } from '../utils/validation';
-import { Activity, BarChart3, Bell, FileText, House, LayoutDashboard, MapPinned, Search, Settings, Users } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Bell, FileText, House, LayoutDashboard, MapPinned, Search, Settings, Users } from 'lucide-react';
 import MonitoringDashboardPage from '../features/monitoring-reports/pages/MonitoringDashboardPage';
 import DistrictResponseOverviewPage from '../features/monitoring-reports/pages/DistrictResponseOverviewPage';
 import RealtimeMonitoringPage from '../features/monitoring-reports/pages/RealtimeMonitoringPage';
@@ -14,9 +14,18 @@ import ReportGenerationPage from '../features/monitoring-reports/pages/ReportGen
 import ReportDetailsPage from '../features/monitoring-reports/pages/ReportDetailsPage';
 import GeneratedReportsPage from '../features/monitoring-reports/pages/GeneratedReportsPage';
 import { ReportGenerationProvider } from '../features/monitoring-reports/context/ReportGenerationContext';
+import HazardWarningsPage from '../features/hazard-warnings/pages/HazardWarningsPage';
+import CreateHazardWarningPage from '../features/hazard-warnings/pages/CreateHazardWarningPage';
+import WarningDetailsPage from '../features/hazard-warnings/pages/WarningDetailsPage';
+import WarningSuccessPage from '../features/hazard-warnings/pages/WarningSuccessPage';
+import StaffHazardReportsPage from '../features/staff-hazard-reports/pages/StaffHazardReportsPage';
+import StaffHazardReportDetailsPage from '../features/staff-hazard-reports/pages/StaffHazardReportDetailsPage';
+import StaffHazardReportsMapPage from '../features/staff-hazard-reports/pages/StaffHazardReportsMapPage';
 
 const navItems = [
   { to: '/staff/monitoring', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/staff/warnings', label: 'Hazard Warnings', icon: AlertTriangle },
+  { to: '/staff/hazard-reports', label: 'Hazard Reports', icon: FileText },
   { to: '/staff/monitoring/Colombo', label: 'District Overview', icon: MapPinned },
   { to: '/staff/monitoring/Colombo/realtime', label: 'Real-Time Monitoring', icon: Activity },
   { to: '/staff/monitoring/Colombo/resources', label: 'Resources & Shelters', icon: House },
@@ -143,6 +152,13 @@ export default function StaffRoutes() {
           <Route element={<StaffLayout />}>
             <Route index element={<Navigate to="monitoring" replace />} />
             <Route path="monitoring" element={<MonitoringDashboardPage />} />
+            <Route path="warnings" element={<HazardWarningsPage />} />
+            <Route path="warnings/create" element={<CreateHazardWarningPage />} />
+            <Route path="warnings/success" element={<WarningSuccessPage />} />
+            <Route path="warnings/:warningId" element={<WarningDetailsPage />} />
+            <Route path="hazard-reports" element={<StaffHazardReportsPage />} />
+            <Route path="hazard-reports/map" element={<StaffHazardReportsMapPage />} />
+            <Route path="hazard-reports/:reportId" element={<StaffHazardReportDetailsPage />} />
             <Route path="monitoring/:district" element={<DistrictResponseOverviewPage />} />
             <Route path="monitoring/:district/realtime" element={<RealtimeMonitoringPage />} />
             <Route path="monitoring/:district/resources" element={<ResourcesSheltersMonitoringPage />} />

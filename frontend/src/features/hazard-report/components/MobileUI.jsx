@@ -25,18 +25,26 @@ export function FormSection({ title, children }) {
   </section>;
 }
 export function LocationCard({ latitude, longitude }) {
-  const valid = latitude !== '' && longitude !== '' && latitude != null && longitude != null;
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  const valid = latitude !== '' && longitude !== '' && latitude != null && longitude != null
+    && Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+  const mapUrl = valid
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.01}%2C${lat - 0.01}%2C${lng + 0.01}%2C${lat + 0.01}&layer=mapnik&marker=${lat}%2C${lng}`
+    : '';
   return <div className="location-card">
-    <div className="map-placeholder" aria-label="Illustrative location panel; not a live map">
-      <MapPin size={32}/>
-      <span>Location preview</span>
-    </div>
+    {valid
+      ? <iframe title="Selected hazard location preview" src={mapUrl} className="location-map" loading="lazy"/>
+      : <div className="map-placeholder" aria-label="Location preview unavailable until coordinates are selected">
+        <MapPin size={32}/>
+        <span>Location preview</span>
+      </div>}
     <p>
-      {valid ? <>Lat: {Number(latitude).toFixed(4)} <span>Lng: {Number(longitude).toFixed(4)}
+      {valid ? <>Lat: {lat.toFixed(4)} <span>Lng: {lng.toFixed(4)}
         </span>
       </> : 'Choose your location below'}
     </p>
-    <small>Illustrative map • coordinates shown as entered</small>
+    <small>{valid ? 'Live map preview • coordinates from your device or manual entry' : 'The map preview appears after you choose a location'}</small>
   </div>;
 }
 export function PublicBrand() {

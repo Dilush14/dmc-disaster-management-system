@@ -29,9 +29,12 @@ public class FirebaseConfig {
                 credentials = GoogleCredentials.fromStream(stream);
             }
         }
+        String normalizedBucket = bucket.trim()
+            .replaceFirst("^gs://", "")
+            .replaceAll("/+$", "");
         FirebaseOptions options = FirebaseOptions.builder()
             .setCredentials(credentials)
-            .setProjectId(projectId).setStorageBucket(bucket).build();
+            .setProjectId(projectId).setStorageBucket(normalizedBucket).build();
         return FirebaseApp.initializeApp(options, "dmc-backend");
     }
 }

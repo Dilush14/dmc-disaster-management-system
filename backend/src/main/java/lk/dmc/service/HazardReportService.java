@@ -85,6 +85,49 @@ public class HazardReportService {
     public Map<String, Object> get(String id, PublicIdentity identity) {
         return publicView(owned(id, identity));
     }
+    public List<Map<String, Object>> staffList() {
+        return reports.findAll().stream()
+            .sorted(Comparator.comparing(
+                (Map<String, Object> report) -> String.valueOf(report.getOrDefault("submittedAt", "")))
+                .reversed())
+            .toList();
+    }
+    public Map<String, Object> staffGet(String id) {
+        var report = reports.find(id);
+        if (report == null) throw missing();
+        return publicView(report);
+    }
+    public Map<String, Object> verify(String id, PublicIdentity identity) {
+        return moderate(id, "VERIFIED", null, identity);
+    }
+    public Map<String, Object> reject(String id, String reason, PublicIdentity identity) {
+        if (reason == null || reason.trim().isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A rejection reason is required.");
+        return moderate(id, "REJECTED", reason.trim(), identity);
+    }
+    public Map<String, Object> assign(String id, String team, PublicIdentity identity) {
+        var report = reports.find(id);
+        if (report == null) throw missing();
+        return publicView(reports.update(id, Map.of(
+            "assignedTeam", team.trim(),
+            "assignedAt", Instant.now().toString(),
+            "assignedBy", identity.id(),
+            "status", "ASSIGNED"
+        )));
+    }
+    private Map<String, Object> moderate(String id, String status, String reason, PublicIdentity identity) {
+        var updates = new LinkedHashMap<String, Object>();
+        updates.put("status", status);
+        updates.put("reviewedAt", Instant.now().toString());
+        updates.put("reviewedBy", identity.id());
+        updates.put("rejectionReason", reason);
+        return publicView(reports.update(id, updates));
+    }
+    public ReportPhotoStorage.Photo staffPhoto(String id) {
+        var report = reports.find(id);
+        if (report == null || report.get("photoPath") == null) throw missing();
+        return photos.download((String) report.get("photoPath"));
+    }
     public ReportPhotoStorage.Photo photo(String id, PublicIdentity identity) {
         var record = owned(id, identity);
         String path = (String) record.get("photoPath");
