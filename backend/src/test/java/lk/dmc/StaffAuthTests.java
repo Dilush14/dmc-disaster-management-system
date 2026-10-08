@@ -20,6 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class StaffAuthTests {
     @Autowired MockMvc mvc;
     @MockitoBean FirebaseIdentityService identities;
+    @MockitoBean com.cloudinary.Cloudinary cloudinary;
     @MockitoBean StaffRegistrationRepository registrations;
 
     @Test

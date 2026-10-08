@@ -1,0 +1,67 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  availableSpace, checkShelterCapacity, checkStock, filterShelters, occupancyBand, occupancyRate, paginate,
+  validateAllocationDetails, validateOccupancy, validateResourceForm, validateResourceSelection, validateShelterForm,
+} from './resourcesShelters.js';
+
+test('available space follows the use case scenario', () => {
+  assert.equal(availableSpace({ capacity: 500, occupied: 380 }), 120);
+  assert.equal(availableSpace({ capacity: 500, occupied: 430 }), 70);
+  assert.equal(availableSpace({ capacity: 500, occupied: 520 }), 0);
+});
+
+test('occupancy rate and legend bands', () => {
+  assert.equal(occupancyRate(780, 1000), 78);
+  assert.equal(occupancyRate(5, 0), 0);
+  assert.equal(occupancyBand(97), 'critical');
+  assert.equal(occupancyBand(78), 'high');
+  assert.equal(occupancyBand(50), 'medium');
+  assert.equal(occupancyBand(10), 'low');
+});
+
+test('capacity check reports the shortfall', () => {
+  const warning = checkShelterCapacity({ name: 'Kalutara Vidyalaya', capacity: 600, occupied: 580 }, 150);
+  assert.equal(warning.available, 20);
+  assert.equal(warning.shortfall, 130);
+  assert.equal(checkShelterCapacity({ name: 'X', capacity: 600, occupied: 580 }, 20), null);
+});
+
+test('stock check finds the first over-allocated resource', () => {
+  const resources = [{ id: 'RS-1', name: 'Food Packs', available: 12450 }, { id: 'RS-3', name: 'Medical Kits', available: 580 }];
+  assert.equal(checkStock({ 'RS-1': 500 }, resources), null);
+  assert.deepEqual(checkStock({ 'RS-1': 500, 'RS-3': 1000 }, resources), { resourceId: 'RS-3', resource: 'Medical Kits', requested: 1000, available: 580, shortage: 420 });
+});
+
+test('selection and occupancy validation', () => {
+  assert.match(validateResourceSelection({}), /at least one/);
+  assert.match(validateResourceSelection({ a: 0 }), /greater than zero/);
+  assert.equal(validateResourceSelection({ a: 3 }), '');
+  assert.match(validateOccupancy('', {}), /required/);
+  assert.match(validateOccupancy('-1', { active: true }), /0 or more/);
+  assert.match(validateOccupancy('10', { active: false }), /inactive/);
+  assert.equal(validateOccupancy('430', { active: true }), '');
+});
+
+test('allocation details validation', () => {
+  const errors = validateAllocationDetails({ distributionDate: '2026-01-01', transportMethod: '', notes: '', expectedPeople: '' }, '2026-09-15');
+  assert.ok(errors.distributionDate);
+  assert.ok(errors.transportMethod);
+  assert.deepEqual(validateAllocationDetails({ distributionDate: '2026-09-15', transportMethod: 'DMC Vehicle', notes: '', expectedPeople: '20' }, '2026-09-15'), {});
+});
+
+test('shelter and resource forms', () => {
+  assert.ok(validateShelterForm({ name: 'A', district: 'Colombo', address: 'x', shelterType: 'School', capacity: '100', occupied: 200 }).capacity);
+  assert.deepEqual(validateShelterForm({ name: 'A', district: 'Colombo', address: 'x', shelterType: 'School', capacity: '100' }), {});
+  assert.ok(validateResourceForm({ name: 'Tents', category: 'Equipment', unit: 'Unit', totalQuantity: '5', available: '9', lowStockThreshold: '1' }).available);
+});
+
+test('filtering and pagination', () => {
+  const shelters = [{ name: 'Colombo Central School', district: 'Colombo', status: 'Active' }, { name: 'Kalutara Vidyalaya', district: 'Kalutara', status: 'Full' }];
+  assert.equal(filterShelters(shelters, { status: 'Full' }).length, 1);
+  assert.equal(filterShelters(shelters, { query: 'colombo' }).length, 1);
+  const page = paginate(Array.from({ length: 20 }, (_, i) => i), 3, 8);
+  assert.deepEqual(page.rows, [16, 17, 18, 19]);
+  assert.equal(page.pages, 3);
+  assert.equal(paginate([], 4).page, 1);
+});
