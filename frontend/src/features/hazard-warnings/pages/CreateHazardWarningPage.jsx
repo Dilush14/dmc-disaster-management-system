@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Check, ChevronLeft, ChevronRight, Send } from 'lucide-react';
 import { affectedDistricts, warningTypes } from '../data/warnings';
+import { createHazardWarning } from '../services/hazardWarningService';
 
 const steps = ['Hazard Type', 'Affected Area', 'Warning Details', 'Channels', 'Review'];
 
@@ -12,8 +13,34 @@ export default function CreateHazardWarningPage() {
   const [areas, setAreas] = useState(['Colombo']);
   const [severity, setSeverity] = useState('High');
   const [message, setMessage] = useState('Heavy rainfall is expected in the selected areas. Please stay alert and follow official updates.');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
   const toggleArea = area => setAreas(current => current.includes(area) ? current.filter(item => item !== area) : [...current, area]);
-  function next() { if (step === steps.length - 1) { navigate('/staff/warnings/success'); return; } setStep(value => value + 1); }
+  async function next() {
+    if (step !== steps.length - 1) {
+      setStep(value => value + 1);
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const warning = await createHazardWarning({
+        type,
+        affectedAreas: areas,
+        severity,
+        title: `${type} warning`,
+        message,
+        validFrom: new Date('2026-09-15T10:00:00').toISOString(),
+        validUntil: new Date('2026-09-16T09:00:00').toISOString(),
+        channels: ['MOBILE_APP', 'SMS', 'EMAIL'],
+      });
+      navigate('/staff/warnings/success', { state: { warning } });
+    } catch (nextError) {
+      setError(nextError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
   return <div className="mx-auto max-w-5xl space-y-6">
     <div><Link to="/staff/warnings" className="inline-flex items-center gap-1 text-sm font-semibold text-blue-700"><ChevronLeft size={16}/> Back to warnings</Link><h1 className="mt-3 text-3xl font-black">Create Hazard Warning</h1><p className="mt-1 text-sm text-slate-500">Complete each step to prepare a warning for broadcast.</p></div>
     <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">{steps.map((label, index) => <div key={label} className="flex items-center gap-2"><div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${index <= step ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-400'}`}>{index < step ? <Check size={15}/> : index + 1}</div><span className={`hidden text-xs font-bold sm:block ${index === step ? 'text-blue-700' : 'text-slate-500'}`}>{label}</span>{index < steps.length - 1 && <div className="mx-1 hidden h-px w-8 bg-slate-200 sm:block lg:w-16"/>}</div>)}</div>
@@ -23,7 +50,8 @@ export default function CreateHazardWarningPage() {
       {step === 2 && <><h2 className="text-xl font-bold">Warning Details & Severity</h2><div className="mt-5 grid gap-5 md:grid-cols-2"><label className="md:col-span-2 text-sm font-bold">Warning message<textarea value={message} onChange={event => setMessage(event.target.value)} rows="5" className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal outline-none focus:border-blue-500"/></label><label className="text-sm font-bold">Valid from<input type="datetime-local" defaultValue="2026-09-15T10:00" className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"/></label><label className="text-sm font-bold">Valid until<input type="datetime-local" defaultValue="2026-09-16T09:00" className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"/></label></div><div className="mt-5 flex flex-wrap gap-2">{['Low','Medium','High','Severe'].map(value => <button key={value} type="button" onClick={() => setSeverity(value)} className={`rounded-lg px-4 py-2 text-sm font-bold ${severity === value ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'}`}>{value}</button>)}</div></>}
       {step === 3 && <><h2 className="text-xl font-bold">Select Notification Channels</h2><p className="mt-1 text-sm text-slate-500">Choose how this warning will reach affected recipients.</p><div className="mt-6 space-y-3">{['Mobile App Notification','SMS Alert','Email Notification','Media / Website','Social Media','Emergency Broadcast'].map((item, index) => <label key={item} className="flex items-center justify-between rounded-xl border border-slate-200 p-4"><span className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" defaultChecked={index < 3} className="h-4 w-4 accent-blue-700"/>{item}</span><span className="text-xs text-slate-500">{index < 3 ? ['125,340 registered users','98,560 registered phone numbers','76,230 registered email addresses'][index] : 'Optional'}</span></label>)}</div></>}
       {step === 4 && <><h2 className="text-xl font-bold">Review & Confirm Broadcast</h2><div className="mt-5 grid gap-4 rounded-xl bg-slate-50 p-5 text-sm sm:grid-cols-2"><div><span className="text-slate-500">Hazard type</span><p className="font-bold">{type}</p></div><div><span className="text-slate-500">Severity</span><p className="font-bold">{severity}</p></div><div><span className="text-slate-500">Affected area</span><p className="font-bold">{areas.join(', ')} District</p></div><div><span className="text-slate-500">Reference no.</span><p className="font-bold">AUTO-GEN</p></div><div className="sm:col-span-2"><span className="text-slate-500">Message</span><p className="mt-1">{message}</p></div></div></>}
-      <div className="mt-8 flex justify-between border-t border-slate-100 pt-5"><button type="button" disabled={step === 0} onClick={() => setStep(value => value - 1)} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 disabled:opacity-40"><ChevronLeft size={16}/> Back</button><button type="button" onClick={next} className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-bold text-white">{step === steps.length - 1 ? <><Send size={15}/> Publish Warning</> : <>Next <ChevronRight size={16}/></>}</button></div>
+      {error && <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      <div className="mt-8 flex justify-between border-t border-slate-100 pt-5"><button type="button" disabled={step === 0 || busy} onClick={() => setStep(value => value - 1)} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 disabled:opacity-40"><ChevronLeft size={16}/> Back</button><button type="button" disabled={busy} onClick={next} className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60">{step === steps.length - 1 ? <><Send size={15}/> {busy ? 'Publishing…' : 'Publish Warning'}</> : <>Next <ChevronRight size={16}/></>}</button></div>
     </div>
   </div>;
 }
