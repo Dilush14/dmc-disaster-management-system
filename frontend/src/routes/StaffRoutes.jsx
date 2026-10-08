@@ -18,10 +18,14 @@ import HazardWarningsPage from '../features/hazard-warnings/pages/HazardWarnings
 import CreateHazardWarningPage from '../features/hazard-warnings/pages/CreateHazardWarningPage';
 import WarningDetailsPage from '../features/hazard-warnings/pages/WarningDetailsPage';
 import WarningSuccessPage from '../features/hazard-warnings/pages/WarningSuccessPage';
+import StaffHazardReportsPage from '../features/staff-hazard-reports/pages/StaffHazardReportsPage';
+import StaffHazardReportDetailsPage from '../features/staff-hazard-reports/pages/StaffHazardReportDetailsPage';
+import StaffHazardReportsMapPage from '../features/staff-hazard-reports/pages/StaffHazardReportsMapPage';
 
 const navItems = [
   { to: '/staff/monitoring', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/staff/warnings', label: 'Hazard Warnings', icon: AlertTriangle },
+  { to: '/staff/hazard-reports', label: 'Hazard Reports', icon: FileText },
   { to: '/staff/monitoring/Colombo', label: 'District Overview', icon: MapPinned },
   { to: '/staff/monitoring/Colombo/realtime', label: 'Real-Time Monitoring', icon: Activity },
   { to: '/staff/monitoring/Colombo/resources', label: 'Resources & Shelters', icon: House },
@@ -152,6 +156,9 @@ export default function StaffRoutes() {
             <Route path="warnings/create" element={<CreateHazardWarningPage />} />
             <Route path="warnings/success" element={<WarningSuccessPage />} />
             <Route path="warnings/:warningId" element={<WarningDetailsPage />} />
+            <Route path="hazard-reports" element={<StaffHazardReportsPage />} />
+            <Route path="hazard-reports/map" element={<StaffHazardReportsMapPage />} />
+            <Route path="hazard-reports/:reportId" element={<StaffHazardReportDetailsPage />} />
             <Route path="monitoring/:district" element={<DistrictResponseOverviewPage />} />
             <Route path="monitoring/:district/realtime" element={<RealtimeMonitoringPage />} />
             <Route path="monitoring/:district/resources" element={<ResourcesSheltersMonitoringPage />} />
