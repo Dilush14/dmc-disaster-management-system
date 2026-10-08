@@ -3,7 +3,7 @@ package lk.dmc;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import javax.imageio.ImageIO;
-import lk.dmc.config.FirebaseGateway;
+import com.cloudinary.Cloudinary;
 import lk.dmc.service.ReportPhotoStorage;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 
 class ReportPhotoStorageTests {
-    final ReportPhotoStorage storage = new ReportPhotoStorage(mock(FirebaseGateway.class));
+    final ReportPhotoStorage storage = new ReportPhotoStorage(mock(Cloudinary.class));
     @Test
     void detectsImageTypeFromBytesRatherThanSuppliedMime() throws Exception {
         var output = new ByteArrayOutputStream();
