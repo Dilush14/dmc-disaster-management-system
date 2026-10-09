@@ -46,7 +46,7 @@ export default function ReportGenerationPage() {
         <h1 className="text-3xl font-black text-slate-900">Report Generation Failed</h1>
         <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-800 shadow-sm">
           <p className="font-semibold">{error}</p>
-          <p className="mt-2 text-sm">Possible causes include incomplete report data, missing shelter occupancy records, missing resource-distribution information, or a temporary system failure.</p>
+          <p className="mt-2 text-sm">Check your connection to the operational data service and confirm the selected report settings, then retry.</p>
         </div>
         <div className="flex gap-3">
           <button type="button" onClick={() => navigate('/staff/reports/generate/configure')} className="rounded-xl bg-blue-700 px-4 py-2 text-white">Back to Configuration</button>

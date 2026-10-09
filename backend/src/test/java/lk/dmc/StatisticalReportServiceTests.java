@@ -2,7 +2,7 @@ package lk.dmc;
 
 import java.util.List;
 import java.util.Map;
-import lk.dmc.repository.MonitoringDataRepository;
+import lk.dmc.repository.CoordinationStore;
 import lk.dmc.repository.StatisticalReportRepository;
 import lk.dmc.security.PublicIdentity;
 import lk.dmc.service.MonitoringService;
@@ -12,74 +12,100 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.web.server.ResponseStatusException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class StatisticalReportServiceTests {
     @Mock StatisticalReportRepository reportRepository;
     @Mock MonitoringService monitoring;
-    @Mock MonitoringDataRepository data;
+    @Mock CoordinationStore coordination;
 
     StatisticalReportService service;
 
     @BeforeEach
     void setUp() {
-        service = new StatisticalReportService(reportRepository, monitoring, data);
-        lenient().when(monitoring.warnings()).thenReturn(List.of(Map.of("title", "Flood warning", "status", "Active", "district", "Colombo", "createdAt", "2026-09-12T10:00:00Z")));
-        lenient().when(monitoring.hazardReports()).thenReturn(List.of(Map.of("reportId", "HR-1", "status", "VERIFIED", "district", "Colombo", "submittedAt", "2026-09-13T10:00:00Z")));
-        lenient().when(data.findAll(anyString())).thenReturn(List.of());
+        service = new StatisticalReportService(reportRepository, monitoring, coordination);
+        lenient().when(monitoring.warnings()).thenReturn(List.of());
+        lenient().when(monitoring.hazardReports()).thenReturn(List.of());
+        lenient().when(coordination.list(anyString())).thenReturn(List.of());
     }
 
     @Test
-    void generationRejectsMissingShelterOccupancyForSelectedSection() {
-        var error = assertThrows(ResponseStatusException.class, () -> service.generate(request("Shelter Occupancy"), identity()));
+    void generationSucceedsWithEmptyLiveCollectionsAndDoesNotInventRecords() {
+        when(reportRepository.create(anyString(), anyMap())).thenAnswer(invocation -> invocation.getArgument(1));
 
-        assertEquals(422, error.getStatusCode().value());
-        org.junit.jupiter.api.Assertions.assertTrue(error.getReason().contains("shelter occupancy records"));
+        var generated = service.generate(request("Incident Summary Report"), identity());
+
+        assertEquals("Incident Summary Report", generated.get("reportType"));
+        assertTrue(((List<?>) generated.get("alertTimeline")).isEmpty());
+        assertTrue(((List<?>) generated.get("citizensReached")).isEmpty());
+        assertTrue(((List<?>) generated.get("shelterOccupancy")).isEmpty());
+        assertTrue(((List<?>) generated.get("resourceDistribution")).isEmpty());
+        assertEquals(0L, generated.get("citizensReachedTotal"));
+        verify(reportRepository).create(anyString(), anyMap());
     }
 
     @Test
-    void generationRejectsMissingCitizensReachedRecordsWithoutUsingWarningRecipients() {
-        var error = assertThrows(ResponseStatusException.class, () -> service.generate(request("Citizens Reached"), identity()));
+    void reportSectionsAreBuiltFromOperationalWarningShelterHistoryAndCompletedDistributions() {
+        when(monitoring.warnings()).thenReturn(List.of(Map.of(
+            "title", "Flood warning", "status", "Active", "affectedAreas", List.of("Colombo"),
+            "createdAt", "2026-09-12T10:00:00Z")));
+        when(monitoring.hazardReports()).thenReturn(List.of(Map.of(
+            "reportId", "HR-1", "description", "Flooded road", "status", "VERIFIED",
+            "location", "Colombo", "submittedAt", "2026-09-13T10:00:00Z")));
+        when(coordination.list(CoordinationStore.SHELTERS)).thenReturn(List.of(Map.of(
+            "id", "SH-1", "name", "Central School", "district", "Colombo", "capacity", 500, "occupied", 220)));
+        when(coordination.list(CoordinationStore.OCCUPANCY_HISTORY)).thenReturn(List.of(Map.of(
+            "shelterId", "SH-1", "previousOccupied", 180, "occupied", 220, "capacity", 500,
+            "recordedAt", "2026-09-14T10:00:00Z")));
+        when(coordination.list(CoordinationStore.DISTRIBUTIONS)).thenReturn(List.of(Map.of(
+            "id", "RD-1", "shelterName", "Central School", "district", "Colombo", "expectedPeople", 75,
+            "status", "COMPLETED", "distributionDate", "2026-09-15", "createdAt", "2026-09-15T08:00:00Z")));
+        when(reportRepository.create(anyString(), anyMap())).thenAnswer(invocation -> invocation.getArgument(1));
 
-        assertEquals(422, error.getStatusCode().value());
-        org.junit.jupiter.api.Assertions.assertTrue(error.getReason().contains("citizens-reached records"));
+        var generated = service.generate(request("District-Wide Report"), identity());
+
+        assertEquals(2, ((List<?>) generated.get("alertTimeline")).size());
+        assertEquals(1, ((List<?>) generated.get("shelterOccupancy")).size());
+        assertEquals(220L, ((Number) ((Map<?, ?>) ((List<?>) generated.get("shelterOccupancy")).get(0)).get("occupancy")).longValue());
+        assertEquals(1, ((List<?>) generated.get("resourceDistribution")).size());
+        assertEquals(75L, generated.get("citizensReachedTotal"));
+        assertEquals(75L, ((Number) ((Map<?, ?>) ((List<?>) generated.get("citizensReached")).get(0)).get("value")).longValue());
+    }
+
+    @Test
+    void previewUsesTheSameLiveDataButDoesNotPersistReport() {
+        var preview = service.preview(request("District-Wide Report"), identity());
+
+        assertEquals("PREVIEW", preview.get("id"));
+        assertEquals("PREVIEW", preview.get("status"));
+        verify(reportRepository, never()).create(anyString(), anyMap());
     }
 
     @Test
     void generationRejectsDateRangesWhereEndPrecedesStart() {
-        var config = new java.util.LinkedHashMap<>(request("Executive Summary"));
+        var config = new java.util.LinkedHashMap<>(request("Incident Summary Report"));
         config.put("dateFrom", "2026-09-20");
         config.put("dateTo", "2026-09-10");
 
-        var error = assertThrows(ResponseStatusException.class, () -> service.generate(config, identity()));
+        var error = org.junit.jupiter.api.Assertions.assertThrows(
+            org.springframework.web.server.ResponseStatusException.class, () -> service.generate(config, identity()));
 
         assertEquals(400, error.getStatusCode().value());
     }
 
-    @Test
-    void reachedCountsComeFromDedicatedRecordsAndReportIsPersisted() {
-        when(data.findAll("citizensReachedRecords")).thenReturn(List.of(Map.of(
-            "programName", "Water Assistance", "district", "Colombo", "citizensReached", 2500, "date", "2026-09-14")));
-        when(reportRepository.create(anyString(), org.mockito.ArgumentMatchers.anyMap()))
-            .thenAnswer(invocation -> invocation.getArgument(1));
-
-        var generated = service.generate(request("Citizens Reached"), identity());
-
-        assertEquals(List.of(Map.of("label", "Water Assistance", "district", "Colombo", "value", 2500, "date", "2026-09-14")), generated.get("citizensReached"));
-        verify(reportRepository).create(anyString(), org.mockito.ArgumentMatchers.anyMap());
-    }
-
-    private Map<String, Object> request(String section) {
-        return Map.of("reportType", "District-Wide Report", "district", "Colombo",
-            "dateFrom", "2026-09-10", "dateTo", "2026-09-20", "selectedSections", List.of(section));
+    private Map<String, Object> request(String reportType) {
+        return Map.of("reportType", reportType, "district", "All Districts",
+            "dateFrom", "2026-09-10", "dateTo", "2026-09-20",
+            "selectedSections", List.of("Hazard Warnings", "Citizens Reached", "Shelter Occupancy", "Resource Distribution"));
     }
 
     private PublicIdentity identity() {

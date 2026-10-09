@@ -9,15 +9,12 @@ import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
-/** Local development store used when Firebase is disabled. Data resets on restart. */
+/** Local development store used when Firebase is disabled. Data resets on restart and starts empty. */
 @Repository
 @ConditionalOnProperty(name = "app.firebase.enabled", havingValue = "false", matchIfMissing = true)
 public class InMemoryCoordinationStore implements CoordinationStore {
     private final Map<String, Map<String, Map<String, Object>>> data = new HashMap<>();
 
-    public InMemoryCoordinationStore() {
-        CoordinationSeedData.seed(this);
-    }
     @Override
     public synchronized List<Map<String, Object>> list(String collection) {
         return new ArrayList<>(data.getOrDefault(collection, Map.of()).values().stream().map(LinkedHashMap::new).toList());
