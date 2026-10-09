@@ -34,7 +34,7 @@ public class MonitoringService {
         summary.put("verifiedReports", allReports.stream().filter(this::isVerifiedReport).count());
         summary.put("activeShelters", shelters.stream().filter(this::isActiveShelter).count());
         summary.put("deployedTeams", teams.stream().filter(this::isDeployedTeam).count());
-        summary.put("affectedPopulation", sumNumeric(allWarnings, "affectedPopulation"));
+        summary.put("affectedPopulation", affectedPopulation(allWarnings));
         summary.put("lastUpdated", Instant.now().toString());
         summary.put("recentActivity", recentActivity(allWarnings, allReports));
         summary.put("hazardsByType", countBy(allWarnings, "type"));
@@ -57,7 +57,7 @@ public class MonitoringService {
             "activeWarnings", allWarnings.stream().filter(this::isActiveWarning).count(),
             "verifiedReports", allReports.stream().filter(this::isVerifiedReport).count(),
             "activeShelters", shelters.stream().filter(this::isActiveShelter).count(),
-            "affectedPopulation", sumNumeric(allWarnings, "affectedPopulation"),
+            "affectedPopulation", affectedPopulation(allWarnings),
             "deployedTeams", teams.stream().filter(this::isDeployedTeam).count()));
         result.put("incidents", incidents(allWarnings, allReports));
         result.put("hazardWarnings", allWarnings);
@@ -168,11 +168,17 @@ public class MonitoringService {
     }
 
     private boolean isActiveShelter(Map<String, Object> item) {
-        return Set.of("ACTIVE", "OPEN", "AVAILABLE").contains(text(item, "status").toUpperCase());
+        // Shelter records store an "active" flag; status is only derived for views.
+        return Boolean.TRUE.equals(item.get("active"));
     }
 
     private boolean isDeployedTeam(Map<String, Object> item) {
-        return Set.of("DEPLOYED", "ACTIVE", "ON_SCENE").contains(text(item, "status").toUpperCase());
+        return Set.of("ASSIGNED", "DISPATCHED", "RESPONDING").contains(text(item, "status").toUpperCase());
+    }
+
+    // Citizens notified by currently active warnings, i.e. people in the affected areas.
+    private long affectedPopulation(List<Map<String, Object>> warnings) {
+        return sumNumeric(warnings.stream().filter(this::isActiveWarning).toList(), "recipients");
     }
 
     private boolean matchesDistrict(Map<String, Object> item, String district) {
