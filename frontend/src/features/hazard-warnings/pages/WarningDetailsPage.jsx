@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Edit3, MapPin, Save, Send, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Edit3, Save, Send, XCircle } from 'lucide-react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { cancelHazardWarning, escalateHazardWarning, getHazardWarning, updateHazardWarning } from '../services/hazardWarningService';
+import { warningPosition } from '../data/warnings';
 
 export default function WarningDetailsPage() {
   const { warningId } = useParams();
@@ -68,8 +71,37 @@ export default function WarningDetailsPage() {
     {editing && <form onSubmit={saveChanges} className="rounded-2xl border border-blue-200 bg-blue-50/50 p-6 shadow-sm"><h2 className="text-xl font-bold">Edit warning</h2><div className="mt-4 grid gap-4 md:grid-cols-2"><label className="text-sm font-bold md:col-span-2">Title<input required value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 font-normal"/></label><label className="text-sm font-bold">Severity<select value={form.severity} onChange={event => setForm({ ...form, severity: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 font-normal">{['Low','Medium','High','Severe'].map(value => <option key={value}>{value}</option>)}</select></label><label className="text-sm font-bold">Valid until<input type="datetime-local" value={form.validUntil.slice(0, 16)} onChange={event => setForm({ ...form, validUntil: new Date(event.target.value).toISOString() })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 font-normal"/></label><label className="text-sm font-bold md:col-span-2">Message<textarea required rows="4" value={form.message} onChange={event => setForm({ ...form, message: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 font-normal"/></label></div><button disabled={busy} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"><Save size={15}/> {busy ? 'Saving…' : 'Save changes'}</button></form>}
     <div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-center justify-between"><h2 className="text-xl font-bold">{warning.title}</h2><span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">{warning.severity}</span></div><dl className="mt-6 grid gap-5 text-sm sm:grid-cols-2"><div><dt className="text-slate-500">Hazard type</dt><dd className="mt-1 font-bold">{warning.type}</dd></div><div><dt className="text-slate-500">Affected area</dt><dd className="mt-1 font-bold">{area}</dd></div><div><dt className="text-slate-500">Valid from</dt><dd className="mt-1 font-bold">{warning.issuedOn}</dd></div><div><dt className="text-slate-500">Valid until</dt><dd className="mt-1 font-bold">{warning.validUntil}</dd></div><div className="sm:col-span-2"><dt className="text-slate-500">Message</dt><dd className="mt-1 rounded-xl bg-slate-50 p-4 leading-6">{warning.message}</dd></div></dl></section>
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">Affected Area Map</h2><div className="relative mt-4 h-56 rounded-xl bg-[#dcebdc]"><div className="absolute inset-8 rounded-[45%] bg-[#b9d99c]"/><div className="absolute left-1/2 top-1/3 h-16 w-16 rounded-full bg-red-400/80"/><div className="relative z-10 flex h-full items-center justify-center"><MapPin className="text-red-700" size={32}/></div></div><div className="mt-5 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-emerald-50 p-3"><CheckCircle2 className="text-emerald-600" size={18}/><b className="mt-1 block">{warning.status}</b><span className="text-xs text-slate-500">{warning.recipients || 0} recipients</span></div><div className="rounded-xl bg-slate-50 p-3"><XCircle className="text-slate-500" size={18}/><b className="mt-1 block">Audit trail</b><span className="text-xs text-slate-500">{auditTrail.length} events recorded</span></div></div></section>
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">Affected Area Map</h2><WarningDetailsMap warning={warning}/><div className="mt-5 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-emerald-50 p-3"><CheckCircle2 className="text-emerald-600" size={18}/><b className="mt-1 block">{warning.status}</b><span className="text-xs text-slate-500">{warning.recipients || 0} recipients</span></div><div className="rounded-xl bg-slate-50 p-3"><XCircle className="text-slate-500" size={18}/><b className="mt-1 block">Audit trail</b><span className="text-xs text-slate-500">{auditTrail.length} events recorded</span></div></div></section>
     </div>
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">Timeline & Audit Trail</h2><div className="mt-5 space-y-4">{auditTrail.length ? auditTrail.slice().reverse().map((event, index) => <div key={`${event.at}-${index}`} className="flex gap-3 text-sm"><div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-600"/><div><p className="font-bold text-slate-800">{event.action}</p><p className="text-slate-500">{event.actor} · {new Date(event.at).toLocaleString()}</p></div></div>) : <p className="text-sm text-slate-500">No audit events recorded yet.</p>}</div></section>
   </div>;
+}
+
+function WarningDetailsMap({ warning }) {
+  const mapRef = useRef(null);
+  const position = warningPosition(warning);
+  useEffect(() => {
+    const map = L.map(mapRef.current, { zoomControl: true, scrollWheelZoom: true });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+    if (position) {
+      const marker = L.circleMarker(position, {
+        radius: 12,
+        color: '#fff',
+        weight: 3,
+        fillColor: warning.severity === 'Severe' ? '#ef4444' : warning.severity === 'High' ? '#f97316' : '#f59e0b',
+        fillOpacity: 0.95,
+      }).addTo(map);
+      const popup = document.createElement('div');
+      popup.textContent = `${warning.area || warning.affectedAreas?.join(', ') || 'Affected area'} · ${warning.severity}`;
+      marker.bindPopup(popup).openPopup();
+      map.setView(position, 11);
+    } else {
+      map.setView([7.8731, 80.7718], 7);
+    }
+    return () => map.remove();
+  }, [position, warning.area, warning.affectedAreas, warning.severity]);
+  return <div ref={mapRef} className="relative mt-4 h-56 overflow-hidden rounded-xl" aria-label="Map showing the affected warning area"/>;
 }
