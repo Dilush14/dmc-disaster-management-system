@@ -1,4 +1,4 @@
-export default function GeneratedReportTable({ reports = [] }) {
+export default function GeneratedReportTable({ reports = [], onView }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <table className="min-w-full text-left text-sm">
@@ -20,7 +20,7 @@ export default function GeneratedReportTable({ reports = [] }) {
               <td className="px-4 py-3 text-slate-600">{report.generatedOn}</td>
               <td className="px-4 py-3">
                 <div className="flex gap-2 text-xs">
-                  <button type="button" className="rounded-md bg-blue-600 px-2 py-1 font-medium text-white">View</button>
+                  <button type="button" onClick={() => onView?.(report.id)} className="rounded-md bg-blue-600 px-2 py-1 font-medium text-white">View</button>
                   <button type="button" className="rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-700">Download</button>
                 </div>
               </td>

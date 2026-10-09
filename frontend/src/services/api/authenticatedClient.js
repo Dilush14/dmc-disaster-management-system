@@ -3,7 +3,11 @@ import { getFirebaseServices } from '../firebase/config';
 
 export async function authenticatedRequest(path, options = {}, { binary = false } = {}) {
   const user = getFirebaseServices()?.auth.currentUser;
-  if (!user) throw new Error('Please log in to continue.');
+  if (!user) {
+    const error = new Error('Please log in to continue.');
+    error.status = 401;
+    throw error;
+  }
   const token = await user.getIdToken();
   let response;
   try {
@@ -18,7 +22,9 @@ export async function authenticatedRequest(path, options = {}, { binary = false 
   }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.message || `Unable to complete the request (${response.status}). Please try again.`);
+    const error = new Error(data.message || `Unable to complete the request (${response.status}). Please try again.`);
+    error.status = response.status;
+    throw error;
   }
   return binary ? response.blob() : response.json();
 }
