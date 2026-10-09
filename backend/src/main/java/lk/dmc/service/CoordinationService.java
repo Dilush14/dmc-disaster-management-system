@@ -323,6 +323,7 @@ public class CoordinationService {
             if (!"AVAILABLE".equals(team.get("status")))
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Team is no longer available: " + team.get("name") + " is "
                     + String.valueOf(team.get("status")).toLowerCase(Locale.ROOT).replace('_', ' ') + ".");
+            SupportPlan support = readSupport(tx, request.teamId(), List.of(), request.supportTeamIds(), request.supportResources());
 
             String now = now();
             String id = newId("TA");
@@ -337,6 +338,8 @@ public class CoordinationService {
             assignment.put("pickupLocation", request.pickupLocation().trim());
             assignment.put("notes", blankToEmpty(request.notes()));
             assignment.put("supportTeamIds", List.of());
+            assignment.put("supportTeams", List.of());
+            assignment.put("supportResources", List.of());
             assignment.put("status", "ASSIGNED");
             assignment.put("assignedBy", actorId);
             assignment.put("assignedAt", now);
@@ -344,19 +347,51 @@ public class CoordinationService {
             assignment.put("arrivedAt", null);
             assignment.put("completedAt", null);
             assignment.put("evacueesDelivered", 0L);
-            assignment.put("history", List.of(historyEntry("ASSIGNED", now, actorId, actorName, "Team assigned to " + shelter.get("name"))));
+            List<Object> history = new ArrayList<>();
+            history.add(historyEntry("ASSIGNED", now, actorId, actorName, "Team assigned to " + shelter.get("name")));
+            if (!support.isEmpty())
+                history.add(historyEntry("ASSIGNED", now, actorId, actorName, support.describe()));
+            assignment.put("history", history);
 
             team.put("status", "ASSIGNED");
             team.put("currentAssignmentId", id);
             team.put("updatedAt", now);
             team.put("updatedBy", actorId);
             tx.set(RESCUE_TEAMS, request.teamId(), team);
+            writeSupport(tx, support, assignment, now, actorId);
             tx.set(TEAM_ASSIGNMENTS, id, assignment);
             return assignment;
         });
     }
 
-    /** Cancels an assignment that has not been dispatched yet and frees the team. */
+    /** Adds support teams and relief stock to an assignment that is assigned or dispatched, all in one transaction. */
+    public Map<String, Object> addSupport(String id, AssignmentSupportRequest request, String actorId) {
+        return addSupport(id, request, actorId, null);
+    }
+
+    public Map<String, Object> addSupport(String id, AssignmentSupportRequest request, String actorId, String actorName) {
+        if (isEmpty(request.supportTeamIds()) && isEmpty(request.supportResources()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose at least one support team or resource.");
+        return store.transaction(tx -> {
+            Map<String, Object> assignment = requireRow(tx.get(TEAM_ASSIGNMENTS, id), "Team assignment");
+            String current = String.valueOf(assignment.get("status"));
+            if (!Set.of("ASSIGNED", "DISPATCHED").contains(current))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Support can only be added to assigned or dispatched teams (this one is "
+                    + current.toLowerCase(Locale.ROOT).replace('_', ' ') + ").");
+            SupportPlan support = readSupport(tx, String.valueOf(assignment.get("teamId")), supportTeamIds(assignment),
+                request.supportTeamIds(), request.supportResources());
+
+            String now = now();
+            List<Object> history = new ArrayList<>(assignment.get("history") instanceof List<?> list ? list : List.of());
+            history.add(historyEntry(current, now, actorId, actorName, support.describe()));
+            assignment.put("history", history);
+            writeSupport(tx, support, assignment, now, actorId);
+            tx.set(TEAM_ASSIGNMENTS, id, assignment);
+            return assignment;
+        });
+    }
+
+    /** Cancels an assignment that has not been dispatched yet, frees its teams and returns its support stock. */
     public Map<String, Object> cancelAssignment(String id, String actorId) {
         return cancelAssignment(id, actorId, null);
     }
@@ -364,28 +399,35 @@ public class CoordinationService {
     public Map<String, Object> cancelAssignment(String id, String actorId, String actorName) {
         return store.transaction(tx -> {
             Map<String, Object> assignment = requireRow(tx.get(TEAM_ASSIGNMENTS, id), "Team assignment");
-            String teamId = String.valueOf(assignment.get("teamId"));
-            Map<String, Object> team = tx.get(RESCUE_TEAMS, teamId);
+            Map<String, Map<String, Object>> teams = readTeams(tx, assignment);
             String current = String.valueOf(assignment.get("status"));
             if (!"ASSIGNED".equals(current))
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Only assignments that have not been dispatched can be cancelled (this one is "
                     + current.toLowerCase(Locale.ROOT).replace('_', ' ') + ").");
+            Map<String, Map<String, Object>> resources = new LinkedHashMap<>();
+            for (Map<?, ?> item : supportResources(assignment)) {
+                String resourceId = String.valueOf(item.get("resourceId"));
+                if (resources.containsKey(resourceId)) continue;
+                Map<String, Object> resource = tx.get(RESOURCES, resourceId);
+                if (resource != null) resources.put(resourceId, new LinkedHashMap<>(resource));
+            }
 
             String now = now();
+            for (Map<?, ?> item : supportResources(assignment)) {
+                Map<String, Object> resource = resources.get(String.valueOf(item.get("resourceId")));
+                if (resource != null) resource.put("available", num(resource.get("available")) + num(item.get("quantity")));
+            }
+            resources.forEach((resourceId, resource) -> {
+                resource.put("updatedAt", now);
+                tx.set(RESOURCES, resourceId, resource);
+            });
             List<Object> history = new ArrayList<>(assignment.get("history") instanceof List<?> list ? list : List.of());
-            history.add(historyEntry("CANCELLED", now, actorId, actorName, "Assignment cancelled"));
+            history.add(historyEntry("CANCELLED", now, actorId, actorName,
+                resources.isEmpty() ? "Assignment cancelled" : "Assignment cancelled; support stock returned"));
             assignment.put("status", "CANCELLED");
             assignment.put("history", history);
             tx.set(TEAM_ASSIGNMENTS, id, assignment);
-            // Free the team only if it is still held by this assignment.
-            if (team != null && id.equals(team.get("currentAssignmentId"))) {
-                team = new LinkedHashMap<>(team);
-                team.put("status", "AVAILABLE");
-                team.put("currentAssignmentId", null);
-                team.put("updatedAt", now);
-                team.put("updatedBy", actorId);
-                tx.set(RESCUE_TEAMS, teamId, team);
-            }
+            moveTeams(tx, teams, id, "AVAILABLE", now, actorId);
             return assignment;
         });
     }
@@ -412,7 +454,7 @@ public class CoordinationService {
 
     /**
      * Records a team's arrival at its shelter: the shelter occupancy, an occupancy history entry, the completed
-     * assignment and the freed team are written together, so a rejected arrival changes nothing.
+     * assignment and the freed teams are written together, so a rejected arrival changes nothing.
      */
     public Map<String, Object> recordArrival(String id, ArrivalRequest request, String actorId) {
         return recordArrival(id, request, actorId, null);
@@ -421,9 +463,8 @@ public class CoordinationService {
     public Map<String, Object> recordArrival(String id, ArrivalRequest request, String actorId, String actorName) {
         return store.transaction(tx -> {
             Map<String, Object> assignment = requireRow(tx.get(TEAM_ASSIGNMENTS, id), "Team assignment");
-            String teamId = String.valueOf(assignment.get("teamId"));
             String shelterId = String.valueOf(assignment.get("shelterId"));
-            Map<String, Object> team = tx.get(RESCUE_TEAMS, teamId);
+            Map<String, Map<String, Object>> teams = readTeams(tx, assignment);
             Map<String, Object> shelter = requireRow(tx.get(SHELTERS, shelterId), "Shelter");
             String current = String.valueOf(assignment.get("status"));
             if (!Set.of("DISPATCHED", "RESPONDING").contains(current))
@@ -464,15 +505,7 @@ public class CoordinationService {
             assignment.put("completedAt", now);
             assignment.put("history", history);
             tx.set(TEAM_ASSIGNMENTS, id, assignment);
-            // Free the team only if it is still held by this assignment.
-            if (team != null && id.equals(team.get("currentAssignmentId"))) {
-                team = new LinkedHashMap<>(team);
-                team.put("status", "AVAILABLE");
-                team.put("currentAssignmentId", null);
-                team.put("updatedAt", now);
-                team.put("updatedBy", actorId);
-                tx.set(RESCUE_TEAMS, teamId, team);
-            }
+            moveTeams(tx, teams, id, "AVAILABLE", now, actorId);
 
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("assignment", assignment);
@@ -487,36 +520,161 @@ public class CoordinationService {
         });
     }
 
-    /** Moves an assignment and its team to the next status together, in one transaction. */
+    /** Moves an assignment and its primary and support teams to the next status together, in one transaction. */
     private Map<String, Object> advanceAssignment(String id, Set<String> allowedFrom, String next, String timestampField,
                                                   String actorId, String actorName, String note, String conflictMessage) {
         return store.transaction(tx -> {
             Map<String, Object> assignment = requireRow(tx.get(TEAM_ASSIGNMENTS, id), "Team assignment");
-            String teamId = String.valueOf(assignment.get("teamId"));
-            Map<String, Object> team = tx.get(RESCUE_TEAMS, teamId);
+            Map<String, Map<String, Object>> teams = readTeams(tx, assignment);
             String current = String.valueOf(assignment.get("status"));
             if (!allowedFrom.contains(current))
                 throw new ResponseStatusException(HttpStatus.CONFLICT, conflictMessage + " (this one is "
                     + current.toLowerCase(Locale.ROOT).replace('_', ' ') + ").");
 
             String now = now();
-            assignment = new LinkedHashMap<>(assignment);
             List<Object> history = new ArrayList<>(assignment.get("history") instanceof List<?> list ? list : List.of());
             history.add(historyEntry(next, now, actorId, actorName, note));
             assignment.put("status", next);
             assignment.put(timestampField, now);
             assignment.put("history", history);
             tx.set(TEAM_ASSIGNMENTS, id, assignment);
-            // The team follows the assignment only while it is still held by it.
-            if (team != null && id.equals(team.get("currentAssignmentId"))) {
-                team = new LinkedHashMap<>(team);
-                team.put("status", next);
-                team.put("updatedAt", now);
-                team.put("updatedBy", actorId);
-                tx.set(RESCUE_TEAMS, teamId, team);
-            }
+            moveTeams(tx, teams, id, next, now, actorId);
             return assignment;
         });
+    }
+
+    /** Support teams and stock read and checked inside a transaction, ready to be written. */
+    private record SupportPlan(Map<String, Map<String, Object>> teams, Map<String, Map<String, Object>> resources,
+                               Map<String, Integer> quantities) {
+        boolean isEmpty() {
+            return teams.isEmpty() && quantities.isEmpty();
+        }
+        String describe() {
+            List<String> parts = new ArrayList<>();
+            if (!teams.isEmpty())
+                parts.add("support teams " + teams.values().stream().map(team -> String.valueOf(team.get("name"))).collect(Collectors.joining(", ")));
+            if (!quantities.isEmpty())
+                parts.add("resources " + quantities.entrySet().stream()
+                    .map(entry -> entry.getValue() + " " + resources.get(entry.getKey()).get("name")).collect(Collectors.joining(", ")));
+            return "Support added: " + String.join("; ", parts);
+        }
+    }
+
+    /** Reads and validates requested support. Performs reads only, so it must run before any write in the transaction. */
+    private static SupportPlan readSupport(CoordinationStore.Tx tx, String primaryTeamId, List<String> existingTeamIds,
+                                           List<String> teamIds, List<AssignTeamRequest.SupportResource> items) {
+        List<String> requested = teamIds == null ? List.of() : teamIds.stream().map(String::trim).distinct().toList();
+        if (requested.contains(primaryTeamId))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A support team must be different from the primary team.");
+        if (existingTeamIds.size() + requested.size() > 5)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "An assignment can have at most 5 support teams.");
+        Map<String, Map<String, Object>> teams = new LinkedHashMap<>();
+        for (String teamId : requested) {
+            Map<String, Object> team = requireRow(tx.get(RESCUE_TEAMS, teamId), "Support team");
+            if (existingTeamIds.contains(teamId))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, team.get("name") + " is already supporting this assignment.");
+            if (!"AVAILABLE".equals(team.get("status")))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Support team is no longer available: " + team.get("name") + " is "
+                    + String.valueOf(team.get("status")).toLowerCase(Locale.ROOT).replace('_', ' ') + ".");
+            teams.put(teamId, team);
+        }
+        Map<String, Integer> quantities = new LinkedHashMap<>();
+        if (items != null) items.forEach(item -> quantities.merge(item.resourceId(), item.quantity(), Integer::sum));
+        Map<String, Map<String, Object>> resources = new LinkedHashMap<>();
+        for (var entry : quantities.entrySet()) {
+            Map<String, Object> resource = requireRow(tx.get(RESOURCES, entry.getKey()), "Resource");
+            long available = num(resource.get("available"));
+            if (entry.getValue() > available)
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Insufficient stock for " + resource.get("name")
+                    + ": requested " + entry.getValue() + ", available " + available + ".");
+            resources.put(entry.getKey(), resource);
+        }
+        return new SupportPlan(teams, resources, quantities);
+    }
+
+    /** Holds the support teams at the assignment's status, reserves the stock and records both on the assignment. */
+    private static void writeSupport(CoordinationStore.Tx tx, SupportPlan plan, Map<String, Object> assignment, String now, String actorId) {
+        String assignmentId = String.valueOf(assignment.get("id"));
+        String status = String.valueOf(assignment.get("status"));
+        List<String> teamIds = new ArrayList<>(supportTeamIds(assignment));
+        List<Object> teamSummaries = new ArrayList<>(assignment.get("supportTeams") instanceof List<?> list ? list : List.of());
+        plan.teams().forEach((teamId, team) -> {
+            team.put("status", status);
+            team.put("currentAssignmentId", assignmentId);
+            team.put("updatedAt", now);
+            team.put("updatedBy", actorId);
+            tx.set(RESCUE_TEAMS, teamId, team);
+            teamIds.add(teamId);
+            Map<String, Object> summary = new LinkedHashMap<>();
+            summary.put("id", teamId);
+            summary.put("name", team.get("name"));
+            summary.put("agency", team.get("agency"));
+            summary.put("memberCount", team.get("memberCount"));
+            teamSummaries.add(summary);
+        });
+        Map<String, Map<String, Object>> reserved = new LinkedHashMap<>();
+        for (Map<?, ?> item : supportResources(assignment)) {
+            Map<String, Object> copy = new LinkedHashMap<>();
+            item.forEach((key, value) -> copy.put(String.valueOf(key), value));
+            reserved.put(String.valueOf(item.get("resourceId")), copy);
+        }
+        plan.resources().forEach((resourceId, resource) -> {
+            long quantity = plan.quantities().get(resourceId);
+            resource.put("available", num(resource.get("available")) - quantity);
+            resource.put("updatedAt", now);
+            tx.set(RESOURCES, resourceId, resource);
+            Map<String, Object> item = reserved.computeIfAbsent(resourceId, ignored -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("resourceId", resourceId);
+                row.put("name", resource.get("name"));
+                row.put("unit", resource.get("unit"));
+                row.put("quantity", 0L);
+                return row;
+            });
+            item.put("quantity", num(item.get("quantity")) + quantity);
+        });
+        assignment.put("supportTeamIds", teamIds);
+        assignment.put("supportTeams", teamSummaries);
+        assignment.put("supportResources", new ArrayList<>(reserved.values()));
+    }
+
+    /** Reads the primary and support teams of an assignment, skipping any that no longer exist. */
+    private static Map<String, Map<String, Object>> readTeams(CoordinationStore.Tx tx, Map<String, Object> assignment) {
+        List<String> ids = new ArrayList<>();
+        ids.add(String.valueOf(assignment.get("teamId")));
+        ids.addAll(supportTeamIds(assignment));
+        Map<String, Map<String, Object>> teams = new LinkedHashMap<>();
+        for (String teamId : ids) {
+            Map<String, Object> team = tx.get(RESCUE_TEAMS, teamId);
+            if (team != null) teams.put(teamId, new LinkedHashMap<>(team));
+        }
+        return teams;
+    }
+
+    /** Moves every team still held by this assignment to the given status; AVAILABLE releases it. */
+    private static void moveTeams(CoordinationStore.Tx tx, Map<String, Map<String, Object>> teams, String assignmentId,
+                                  String status, String now, String actorId) {
+        teams.forEach((teamId, team) -> {
+            if (!assignmentId.equals(team.get("currentAssignmentId"))) return;
+            team.put("status", status);
+            if ("AVAILABLE".equals(status)) team.put("currentAssignmentId", null);
+            team.put("updatedAt", now);
+            team.put("updatedBy", actorId);
+            tx.set(RESCUE_TEAMS, teamId, team);
+        });
+    }
+
+    private static List<String> supportTeamIds(Map<String, Object> assignment) {
+        return assignment.get("supportTeamIds") instanceof List<?> list ? list.stream().map(String::valueOf).toList() : List.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<?, ?>> supportResources(Map<String, Object> assignment) {
+        return assignment.get("supportResources") instanceof List<?> list ? (List<Map<?, ?>>) list : List.of();
+    }
+
+    private static boolean isEmpty(List<?> list) {
+        return list == null || list.isEmpty();
     }
 
     private static Map<String, Object> historyEntry(String status, String at, String by, String byName, String note) {

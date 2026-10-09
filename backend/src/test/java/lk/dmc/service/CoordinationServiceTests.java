@@ -323,6 +323,96 @@ class CoordinationServiceTests {
         assertStatus(HttpStatus.NOT_FOUND, () -> service.recordArrival("TA-NOPE", new ArrivalRequest(10, 430), "officer-1"));
     }
 
+    @Test
+    void supportTeamsAndStockAreHeldWithTheAssignment() {
+        var assignment = service.assignTeam(supported(List.of("RT-002", "RT-003"), List.of(support("RS-003", 80), support("RS-003", 20))), "officer-1");
+        String id = String.valueOf(assignment.get("id"));
+        assertEquals(List.of("RT-002", "RT-003"), assignment.get("supportTeamIds"));
+        assertEquals(2, ((List<?>) assignment.get("supportTeams")).size());
+        var reserved = (List<?>) assignment.get("supportResources");
+        assertEquals(1, reserved.size());
+        assertEquals(100L, ((Map<?, ?>) reserved.get(0)).get("quantity"));
+        assertEquals(480L, store.find(CoordinationStore.RESOURCES, "RS-003").get("available"));
+        for (String teamId : List.of("RT-002", "RT-003")) {
+            var team = store.find(CoordinationStore.RESCUE_TEAMS, teamId);
+            assertEquals("ASSIGNED", team.get("status"));
+            assertEquals(id, team.get("currentAssignmentId"));
+        }
+    }
+
+    @Test
+    void supportTeamsFollowThePrimaryThroughDispatchAndArrival() {
+        String id = String.valueOf(service.assignTeam(supported(List.of("RT-002"), List.of()), "officer-1").get("id"));
+        service.dispatch(id, "officer-1");
+        assertEquals("DISPATCHED", store.find(CoordinationStore.RESCUE_TEAMS, "RT-002").get("status"));
+        service.markResponding(id, "officer-1");
+        assertEquals("RESPONDING", store.find(CoordinationStore.RESCUE_TEAMS, "RT-002").get("status"));
+        service.recordArrival(id, new ArrivalRequest(10, 380), "officer-1");
+        for (String teamId : List.of("RT-001", "RT-002")) {
+            var team = store.find(CoordinationStore.RESCUE_TEAMS, teamId);
+            assertEquals("AVAILABLE", team.get("status"));
+            assertNull(team.get("currentAssignmentId"));
+        }
+    }
+
+    @Test
+    void shortSupportStockRollsBackTheWholeAssignment() {
+        var error = assertThrows(ResponseStatusException.class,
+            () -> service.assignTeam(supported(List.of("RT-002"), List.of(support("RS-001", 10), support("RS-005", 16))), "officer-1"));
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().startsWith("Insufficient stock for Portable Generators"));
+        assertTrue(store.list(CoordinationStore.TEAM_ASSIGNMENTS).isEmpty());
+        assertEquals("AVAILABLE", store.find(CoordinationStore.RESCUE_TEAMS, "RT-001").get("status"));
+        assertEquals("AVAILABLE", store.find(CoordinationStore.RESCUE_TEAMS, "RT-002").get("status"));
+        assertEquals(12450L, store.find(CoordinationStore.RESOURCES, "RS-001").get("available"));
+    }
+
+    @Test
+    void supportTeamsMustBeAvailableAndDifferFromThePrimary() {
+        assertStatus(HttpStatus.BAD_REQUEST, () -> service.assignTeam(supported(List.of("RT-001"), List.of()), "officer-1"));
+        assertStatus(HttpStatus.CONFLICT, () -> service.assignTeam(supported(List.of("RT-004"), List.of()), "officer-1"));
+        assertStatus(HttpStatus.NOT_FOUND, () -> service.assignTeam(supported(List.of("RT-NOPE"), List.of()), "officer-1"));
+        assertTrue(store.list(CoordinationStore.TEAM_ASSIGNMENTS).isEmpty());
+        assertEquals("AVAILABLE", store.find(CoordinationStore.RESCUE_TEAMS, "RT-001").get("status"));
+    }
+
+    @Test
+    void cancellingFreesSupportTeamsAndReturnsStock() {
+        String id = String.valueOf(service.assignTeam(supported(List.of("RT-002"), List.of(support("RS-004", 200))), "officer-1").get("id"));
+        service.addSupport(id, new AssignmentSupportRequest(List.of("RT-003"), List.of(support("RS-004", 100))), "officer-1");
+        assertEquals(900L, store.find(CoordinationStore.RESOURCES, "RS-004").get("available"));
+        service.cancelAssignment(id, "officer-1");
+        assertEquals(1200L, store.find(CoordinationStore.RESOURCES, "RS-004").get("available"));
+        for (String teamId : List.of("RT-001", "RT-002", "RT-003")) {
+            var team = store.find(CoordinationStore.RESCUE_TEAMS, teamId);
+            assertEquals("AVAILABLE", team.get("status"));
+            assertNull(team.get("currentAssignmentId"));
+        }
+    }
+
+    @Test
+    void supportAddedAfterDispatchJoinsAsDispatched() {
+        String id = String.valueOf(service.assignTeam(assign("RT-001", "SH-009", 10), "officer-1").get("id"));
+        service.dispatch(id, "officer-1");
+        var updated = service.addSupport(id, new AssignmentSupportRequest(List.of("RT-005"), List.of()), "officer-1", "Mohammed Hamza");
+        assertEquals(List.of("RT-005"), updated.get("supportTeamIds"));
+        assertEquals("DISPATCHED", store.find(CoordinationStore.RESCUE_TEAMS, "RT-005").get("status"));
+        assertEquals(3, ((List<?>) updated.get("history")).size());
+        assertStatus(HttpStatus.CONFLICT, () -> service.addSupport(id, new AssignmentSupportRequest(List.of("RT-005"), List.of()), "officer-1"));
+        assertStatus(HttpStatus.BAD_REQUEST, () -> service.addSupport(id, new AssignmentSupportRequest(List.of(), List.of()), "officer-1"));
+        service.markResponding(id, "officer-1");
+        assertStatus(HttpStatus.CONFLICT, () -> service.addSupport(id, new AssignmentSupportRequest(List.of("RT-002"), List.of()), "officer-1"));
+        assertEquals("AVAILABLE", store.find(CoordinationStore.RESCUE_TEAMS, "RT-002").get("status"));
+    }
+
+    private static AssignTeamRequest supported(List<String> teamIds, List<AssignTeamRequest.SupportResource> resources) {
+        return new AssignTeamRequest("RT-001", "SH-009", 10, "Kolonnawa junction", "", teamIds, resources);
+    }
+
+    private static AssignTeamRequest.SupportResource support(String resourceId, int quantity) {
+        return new AssignTeamRequest.SupportResource(resourceId, quantity);
+    }
+
     private static AssignTeamRequest assign(String teamId, String shelterId, int expected) {
         return new AssignTeamRequest(teamId, shelterId, expected, "Kolonnawa junction", "");
     }

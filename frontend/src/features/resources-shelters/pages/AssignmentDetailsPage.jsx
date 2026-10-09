@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, MapPinCheck, Radio, Send, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, MapPinCheck, Radio, Send, Users, XCircle } from 'lucide-react';
 import { cancelTeamAssignment, dispatchTeamAssignment, getTeamAssignment, markAssignmentResponding } from '../services/resourcesSheltersService';
-import { canCancelAssignment, canDispatchAssignment, canMarkResponding, canRecordArrival } from '../utils/resourcesShelters';
+import { canAddSupport, canCancelAssignment, canDispatchAssignment, canMarkResponding, canRecordArrival } from '../utils/resourcesShelters';
 import { Card, ErrorBanner, formatDateTime, Loading, Modal, PrimaryButton, SecondaryButton, StatusBadge, useAsync } from '../components/ui';
 import RecordArrivalDialog from '../components/RecordArrivalDialog';
+import AddSupportDialog from '../components/AddSupportDialog';
 
 const actions = {
-  cancel: { run: cancelTeamAssignment, success: 'Assignment cancelled and the team released.' },
+  cancel: { run: cancelTeamAssignment, success: 'Assignment cancelled; teams released and any support stock returned.' },
   dispatch: { run: dispatchTeamAssignment, success: 'Team dispatched.' },
   responding: { run: markAssignmentResponding, success: 'Team marked as responding.' },
 };
@@ -66,6 +67,7 @@ export default function AssignmentDetailsPage() {
           <StatusBadge status={assignment.status} />
         </div>
         <div className="flex flex-wrap gap-2">
+          {canAddSupport(assignment) && <SecondaryButton disabled={!!busy} onClick={() => { setActionError(null); setSuccess(''); setConfirming('support'); }}><Users size={16} />Add Support</SecondaryButton>}
           {canDispatchAssignment(assignment) && <PrimaryButton disabled={!!busy} onClick={() => setConfirming('dispatch')}><Send size={16} />Dispatch Team</PrimaryButton>}
           {canMarkResponding(assignment) && <PrimaryButton disabled={!!busy} onClick={() => perform('responding')}><Radio size={16} />{busy === 'responding' ? 'Updating…' : 'Mark Responding'}</PrimaryButton>}
           {canRecordArrival(assignment) && <PrimaryButton disabled={!!busy} onClick={() => { setActionError(null); setSuccess(''); setConfirming('arrival'); }}><MapPinCheck size={16} />Record Arrival</PrimaryButton>}
@@ -93,6 +95,30 @@ export default function AssignmentDetailsPage() {
           </dl>
           {assignment.notes && <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-600"><span className="font-semibold">Notes: </span>{assignment.notes}</p>}
         </Card>
+        <Card title="Support" className="lg:col-span-2">
+          <div className="grid gap-6 md:grid-cols-2">
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Support Teams</h3>
+              {assignment.supportTeams?.length ? (
+                <ul className="divide-y divide-slate-100 text-sm">
+                  {assignment.supportTeams.map(item => (
+                    <li key={item.id} className="flex justify-between gap-3 py-2"><span className="font-medium text-slate-800">{item.name}</span><span className="text-slate-500">{item.agency}{item.memberCount ? ` · ${item.memberCount} members` : ''}</span></li>
+                  ))}
+                </ul>
+              ) : <p className="text-sm text-slate-500">No support teams.</p>}
+            </div>
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Support Resources</h3>
+              {assignment.supportResources?.length ? (
+                <ul className="divide-y divide-slate-100 text-sm">
+                  {assignment.supportResources.map(item => (
+                    <li key={item.resourceId} className="flex justify-between gap-3 py-2"><span className="font-medium text-slate-800">{item.name}</span><span className="text-slate-600">{Number(item.quantity).toLocaleString()} {item.unit}</span></li>
+                  ))}
+                </ul>
+              ) : <p className="text-sm text-slate-500">No support resources.</p>}
+            </div>
+          </div>
+        </Card>
         <Card title="Timeline">
           <ol className="relative space-y-4 border-l-2 border-slate-100 pl-5">
             {history.map((entry, index) => (
@@ -116,6 +142,14 @@ export default function AssignmentDetailsPage() {
         />
       )}
 
+      {confirming === 'support' && (
+        <AddSupportDialog
+          assignment={assignment}
+          onClose={() => setConfirming(null)}
+          onAdded={updated => { setData(updated); setSuccess('Support added to the assignment.'); setConfirming(null); }}
+        />
+      )}
+
       {confirming === 'dispatch' && (
         <Modal
           title="Dispatch Team"
@@ -135,7 +169,7 @@ export default function AssignmentDetailsPage() {
           onClose={() => setConfirming(null)}
           footer={<><SecondaryButton onClick={() => setConfirming(null)}>Keep Assignment</SecondaryButton><button type="button" disabled={busy === 'cancel'} onClick={() => perform('cancel')} className="inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600! px-4 py-2 text-sm font-semibold text-white! hover:bg-rose-700! disabled:cursor-not-allowed disabled:opacity-50">{busy === 'cancel' ? 'Cancelling…' : 'Cancel Assignment'}</button></>}
         >
-          <p className="text-sm text-slate-600">{assignment.teamName} will be released and marked available for other assignments. This cannot be undone.</p>
+          <p className="text-sm text-slate-600">{assignment.teamName}{assignment.supportTeams?.length ? ` and ${assignment.supportTeams.length} support team(s)` : ''} will be released and marked available for other assignments{assignment.supportResources?.length ? '; reserved support stock will be returned' : ''}. This cannot be undone.</p>
         </Modal>
       )}
     </div>

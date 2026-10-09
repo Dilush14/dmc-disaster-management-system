@@ -112,6 +112,11 @@ public class StaffCoordinationController {
     public Map<String, Object> assignTeam(@Valid @RequestBody AssignTeamRequest request, @AuthenticationPrincipal PublicIdentity identity) {
         return coordination.assignTeam(request, identity.id(), displayName(identity));
     }
+    @PostMapping("/team-assignments/{id}/support")
+    public Map<String, Object> addSupport(@PathVariable String id, @Valid @RequestBody AssignmentSupportRequest request,
+                                          @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.addSupport(id, request, identity.id(), displayName(identity));
+    }
     @PostMapping("/team-assignments/{id}/cancel")
     public Map<String, Object> cancelAssignment(@PathVariable String id, @AuthenticationPrincipal PublicIdentity identity) {
         return coordination.cancelAssignment(id, identity.id(), displayName(identity));

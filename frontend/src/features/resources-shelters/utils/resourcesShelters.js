@@ -218,6 +218,8 @@ export function assignmentConflictKind(error) {
   if (error?.status !== 409) return null;
   const message = String(error.message || '').toLowerCase();
   if (message.includes('capacity')) return 'capacity';
+  if (message.includes('stock')) return 'stock';
+  if (message.includes('support team') || message.includes('already supporting')) return 'support';
   if (message.includes('team')) return 'team';
   return null;
 }
@@ -272,4 +274,45 @@ export function previewArrival(shelter, delivered) {
 export function peopleLabel(count) {
   const n = Number(count);
   return `${n.toLocaleString()} ${n === 1 ? 'person' : 'people'}`;
+}
+
+export const MAX_SUPPORT_TEAMS = 5;
+
+/** Available teams that can join as support: never the primary team or teams already supporting. */
+export function supportTeamOptions(teams, primaryTeamId, excludeIds = []) {
+  return (teams || []).filter(team => team.status === 'AVAILABLE' && team.id !== primaryTeamId && !excludeIds.includes(team.id));
+}
+
+/** Adds or removes a support team, keeping at most `limit` selected. */
+export function toggleSupportTeam(ids, id, limit = MAX_SUPPORT_TEAMS) {
+  if (ids.includes(id)) return ids.filter(item => item !== id);
+  return ids.length >= limit ? ids : [...ids, id];
+}
+
+/** { resourceId: quantity } → [{ resourceId, quantity }], skipping blank quantities. */
+export function supportResourcePayload(selection) {
+  return Object.entries(selection || {})
+    .filter(([, quantity]) => quantity !== '' && quantity !== null && quantity !== undefined)
+    .map(([resourceId, quantity]) => ({ resourceId, quantity: Number(quantity) }));
+}
+
+/** Support resources are optional, but any quantity entered must be a whole number of 1 or more. */
+export function validateSupportResources(selection) {
+  for (const { quantity } of supportResourcePayload(selection)) {
+    if (!Number.isInteger(quantity) || quantity < 1) return 'Resource quantities must be whole numbers greater than zero.';
+  }
+  return '';
+}
+
+/** Add Support needs at least one team or resource. */
+export function validateSupportRequest(teamIds, selection) {
+  const problem = validateSupportResources(selection);
+  if (problem) return problem;
+  if (!teamIds.length && !supportResourcePayload(selection).length) return 'Choose at least one support team or resource.';
+  return '';
+}
+
+/** Support can be added until the team starts responding on the ground. */
+export function canAddSupport(assignment) {
+  return ['ASSIGNED', 'DISPATCHED'].includes(assignment?.status);
 }
