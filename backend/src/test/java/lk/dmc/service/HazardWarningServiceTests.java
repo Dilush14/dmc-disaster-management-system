@@ -177,6 +177,22 @@ class HazardWarningServiceTests {
     }
 
     @Test
+    void publicListKeepsEscalatedWarningsUntilTheyExpire() {
+        Instant now = Instant.now();
+        when(warnings.findAll()).thenReturn(List.of(
+            Map.of("id", "HW-1", "status", "Escalated", "channels", List.of("WEBSITE"),
+                "validFrom", now.minusSeconds(3600).toString(), "validUntil", now.plusSeconds(3600).toString()),
+            Map.of("id", "HW-2", "status", "Escalated", "channels", List.of("WEBSITE"),
+                "validFrom", now.minusSeconds(7200).toString(), "validUntil", now.minusSeconds(3600).toString()),
+            Map.of("id", "HW-3", "status", "Cancelled", "channels", List.of("WEBSITE"),
+                "validFrom", now.minusSeconds(3600).toString(), "validUntil", now.plusSeconds(3600).toString())));
+
+        List<Map<String, Object>> items = (List<Map<String, Object>>) service.publicList().get("items");
+
+        assertEquals(List.of("HW-1"), items.stream().map(item -> item.get("id")).toList());
+    }
+
+    @Test
     void findAllDelegatesToRepository() {
         List<Map<String, Object>> expected = List.of(Map.of("id", "HW-1"));
         when(warnings.findAll()).thenReturn(expected);
