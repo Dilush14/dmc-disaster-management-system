@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, CheckCircle2, Search, Send } from 'lucide-react';
-import { assignTeam, dispatchTeamAssignment, listShelters, listTeams } from '../services/resourcesSheltersService';
+import { assignTeam, dispatchTeamAssignment, listResources, listShelters, listTeams } from '../services/resourcesSheltersService';
 import {
-  assignmentConflictKind, canDispatchAssignment, checkShelterCapacity, filterShelters, filterTeams, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam,
+  assignmentConflictKind, canDispatchAssignment, checkShelterCapacity, checkStock, filterShelters, supportResourcePayload, validateSupportResources, filterTeams, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam,
 } from '../utils/resourcesShelters';
-import { CapacityWarningDialog } from '../components/WarningDialogs';
+import { CapacityWarningDialog, StockWarningDialog } from '../components/WarningDialogs';
+import { SupportResourcePicker, SupportTeamPicker } from '../components/SupportPickers';
 import ActiveResponseBanner from '../components/ActiveResponseBanner';
 import { Card, ErrorBanner, Field, inputClass, Loading, PageHeader, PrimaryButton, SecondaryButton, Select, StatusBadge, Stepper, useAsync } from '../components/ui';
 
-const steps = ['Select Shelter', 'Select Team', 'Pickup & Notes', 'Review'];
+const steps = ['Select Shelter', 'Select Team', 'Pickup & Resources', 'Review'];
 
 export default function AssignTeamPage() {
   const [params] = useSearchParams();
@@ -18,9 +19,14 @@ export default function AssignTeamPage() {
   const [step, setStep] = useState(1);
   const [shelterId, setShelterId] = useState(params.get('shelterId') || '');
   const [teamId, setTeamId] = useState(params.get('teamId') || '');
+  const resources = useAsync(signal => listResources({ signal }), []);
   const [details, setDetails] = useState({ expectedEvacuees: '', pickupLocation: '', notes: '' });
+  // Optional help from other agencies and relief stock sent with the team.
+  const [supportTeamIds, setSupportTeamIds] = useState([]);
+  const [supportSelection, setSupportSelection] = useState({});
   const [errors, setErrors] = useState({});
   const [capacityWarning, setCapacityWarning] = useState(null);
+  const [stockWarning, setStockWarning] = useState(null);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [recorded, setRecorded] = useState(null);
@@ -29,6 +35,10 @@ export default function AssignTeamPage() {
 
   const shelter = (shelters.data || []).find(item => item.id === shelterId);
   const team = (teams.data || []).find(item => item.id === teamId);
+  const support = {
+    teams: (teams.data || []).filter(item => supportTeamIds.includes(item.id)),
+    resources: supportResourcePayload(supportSelection).map(item => ({ ...item, resource: (resources.data || []).find(row => row.id === item.resourceId) })),
+  };
 
   const loadError = shelters.error || teams.error;
   if (loadError && (!shelters.data || !teams.data)) {
@@ -39,7 +49,13 @@ export default function AssignTeamPage() {
   const reset = () => {
     setStep(1); setShelterId(''); setTeamId(''); setRecorded(null); setSubmitError(''); setDispatchError('');
     setDetails({ expectedEvacuees: '', pickupLocation: '', notes: '' });
-    shelters.reload(); teams.reload();
+    setSupportTeamIds([]); setSupportSelection({});
+    shelters.reload(); teams.reload(); resources.reload();
+  };
+
+  const selectTeam = id => {
+    setTeamId(id);
+    setSupportTeamIds(current => current.filter(item => item !== id));
   };
 
   const goToTeam = () => {
@@ -59,8 +75,13 @@ export default function AssignTeamPage() {
 
   const goToReview = () => {
     const found = validateAssignmentDetails(details);
+    const resourceProblem = validateSupportResources(supportSelection);
+    if (resourceProblem) found.supportResources = resourceProblem;
     setErrors(found);
-    if (!Object.keys(found).length) setStep(4);
+    if (Object.keys(found).length) return;
+    const warning = checkStock(supportSelection, resources.data || []);
+    if (warning) return setStockWarning(warning);
+    setStep(4);
   };
 
   const confirm = async () => {
@@ -73,10 +94,22 @@ export default function AssignTeamPage() {
         expectedEvacuees: Number(details.expectedEvacuees),
         pickupLocation: details.pickupLocation.trim(),
         notes: details.notes.trim(),
+        supportTeamIds,
+        supportResources: supportResourcePayload(supportSelection),
       }));
     } catch (failure) {
       const kind = assignmentConflictKind(failure);
-      if (kind === 'team') {
+      if (kind === 'stock') {
+        // Stock was taken since loading: refresh and let the officer adjust the quantities.
+        setSubmitError(failure.message);
+        setStep(3);
+        resources.reload();
+      } else if (kind === 'support') {
+        setSubmitError(`${failure.message} Please review the support teams.`);
+        setSupportTeamIds([]);
+        setStep(2);
+        teams.reload();
+      } else if (kind === 'team') {
         // Another officer took the team first: refresh and pick again.
         setSubmitError(`Team became unavailable. ${failure.message} Please choose another team.`);
         setTeamId('');
@@ -120,6 +153,12 @@ export default function AssignTeamPage() {
           <CheckCircle2 size={48} className="mx-auto text-emerald-500" />
           <h2 className="mt-3 text-xl font-black text-slate-900">Team assigned</h2>
           <p className="mt-1 text-sm text-slate-600">{recorded.id} · {recorded.teamName} will move {Number(recorded.expectedEvacuees).toLocaleString()} evacuees from {recorded.pickupLocation} to {recorded.shelterName}.</p>
+          {(recorded.supportTeams?.length > 0 || recorded.supportResources?.length > 0) && (
+            <p className="mt-1 text-sm text-slate-600">Support: {[
+              ...(recorded.supportTeams || []).map(item => item.name),
+              ...(recorded.supportResources || []).map(item => `${Number(item.quantity).toLocaleString()} ${item.name}`),
+            ].join(', ')}.</p>
+          )}
           <div className="mt-2"><StatusBadge status={recorded.status} /></div>
           {recorded.status === 'DISPATCHED' && <p role="status" className="mt-3 text-sm font-semibold text-emerald-700">Team dispatched.</p>}
           {dispatchError && <div className="mt-3 text-left"><ErrorBanner message={dispatchError} onRetry={dispatchNow} /></div>}
@@ -140,9 +179,9 @@ export default function AssignTeamPage() {
       <Card>
         <Stepper steps={steps} step={step} />
         {step === 1 && <ShelterStep shelters={shelters.data} shelterId={shelterId} setShelterId={setShelterId} details={details} setDetails={setDetails} errors={errors} />}
-        {step === 2 && <TeamStep teams={teams.data} teamId={teamId} setTeamId={setTeamId} error={errors.teamId} district={team ? undefined : shelter?.district} />}
-        {step === 3 && <DetailsStep details={details} setDetails={setDetails} errors={errors} shelter={shelter} team={team} />}
-        {step === 4 && <ReviewStep details={details} shelter={shelter} team={team} />}
+        {step === 2 && <TeamStep teams={teams.data} teamId={teamId} setTeamId={selectTeam} error={errors.teamId} district={team ? undefined : shelter?.district} supportTeamIds={supportTeamIds} setSupportTeamIds={setSupportTeamIds} />}
+        {step === 3 && <DetailsStep details={details} setDetails={setDetails} errors={errors} shelter={shelter} team={team} support={support} resources={resources} selection={supportSelection} setSelection={setSupportSelection} />}
+        {step === 4 && <ReviewStep details={details} shelter={shelter} team={team} support={support} />}
         {submitError && <div className="mt-4"><ErrorBanner message={submitError} /></div>}
 
         <div className="mt-6 flex justify-between gap-2 border-t border-slate-100 pt-4">
@@ -160,6 +199,13 @@ export default function AssignTeamPage() {
           warning={capacityWarning}
           onClose={() => setCapacityWarning(null)}
           onViewAlternatives={() => { setCapacityWarning(null); setShelterId(''); setStep(1); }}
+        />
+      )}
+      {stockWarning && (
+        <StockWarningDialog
+          warning={stockWarning}
+          onClose={() => setStockWarning(null)}
+          onAdjust={() => { setSupportSelection(current => ({ ...current, [stockWarning.resourceId]: String(stockWarning.available) })); setStockWarning(null); }}
         />
       )}
     </div>
@@ -210,7 +256,28 @@ function ShelterStep({ shelters, shelterId, setShelterId, details, setDetails, e
   );
 }
 
-function TeamStep({ teams, teamId, setTeamId, error, district }) {
+function TeamStep({ teams, teamId, setTeamId, error, district, supportTeamIds, setSupportTeamIds }) {
+  const [showSupport, setShowSupport] = useState(supportTeamIds.length > 0);
+  return (
+    <>
+      <PrimaryTeamTable teams={teams} teamId={teamId} setTeamId={setTeamId} error={error} district={district} />
+      <div className="mt-6 border-t border-slate-100 pt-4">
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+          <input type="checkbox" checked={showSupport} onChange={event => { setShowSupport(event.target.checked); if (!event.target.checked) setSupportTeamIds([]); }} />
+          Add support from other agencies <span className="font-normal text-slate-500">(optional)</span>
+        </label>
+        {showSupport && (
+          <div className="mt-3">
+            {teamId ? <SupportTeamPicker teams={teams} primaryTeamId={teamId} selected={supportTeamIds} onChange={setSupportTeamIds} />
+              : <p className="text-sm text-slate-500">Select the primary team first.</p>}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function PrimaryTeamTable({ teams, teamId, setTeamId, error, district }) {
   const [query, setQuery] = useState('');
   const [districtFilter, setDistrictFilter] = useState(district || 'All');
   const districts = useMemo(() => [...new Set(teams.map(item => item.district))].sort(), [teams]);
@@ -248,7 +315,7 @@ function TeamStep({ teams, teamId, setTeamId, error, district }) {
   );
 }
 
-function Summary({ shelter, team, details }) {
+function Summary({ shelter, team, details, support }) {
   return (
     <div className="space-y-3 rounded-xl bg-slate-50 p-4 text-sm">
       <div>
@@ -261,6 +328,18 @@ function Summary({ shelter, team, details }) {
         <div className="font-semibold text-slate-800">{team?.name}</div>
         <div className="text-slate-500">{team?.agency} · {team?.memberCount} members · {team?.leader}</div>
       </div>
+      {support.teams.length > 0 && (
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Support Teams</div>
+          <ul className="text-slate-700">{support.teams.map(item => <li key={item.id}>{item.name} <span className="text-slate-500">· {item.agency}</span></li>)}</ul>
+        </div>
+      )}
+      {support.resources.length > 0 && (
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Support Resources</div>
+          <ul className="text-slate-700">{support.resources.map(item => <li key={item.resourceId}>{item.quantity.toLocaleString()} {item.resource?.unit} · {item.resource?.name || item.resourceId}</li>)}</ul>
+        </div>
+      )}
       <div className="flex justify-between"><span className="text-slate-500">Expected Evacuees</span><span>{Number(details.expectedEvacuees).toLocaleString()}</span></div>
       {details.pickupLocation && <div className="flex justify-between gap-4"><span className="text-slate-500">Pickup Location</span><span className="text-right">{details.pickupLocation}</span></div>}
       <div className="flex justify-between"><span className="text-slate-500">Status</span><StatusBadge status="ASSIGNED" /></div>
@@ -268,7 +347,7 @@ function Summary({ shelter, team, details }) {
   );
 }
 
-function DetailsStep({ details, setDetails, errors, shelter, team }) {
+function DetailsStep({ details, setDetails, errors, shelter, team, support, resources, selection, setSelection }) {
   const set = key => event => setDetails(current => ({ ...current, [key]: event.target.value }));
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -284,18 +363,25 @@ function DetailsStep({ details, setDetails, errors, shelter, team }) {
       </div>
       <div>
         <h2 className="mb-3 text-base font-bold text-slate-800">Summary</h2>
-        <Summary shelter={shelter} team={team} details={details} />
+        <Summary shelter={shelter} team={team} details={details} support={support} />
+      </div>
+      <div className="md:col-span-2">
+        <h2 className="text-base font-bold text-slate-800">Support Resources <span className="text-sm font-normal text-slate-500">(optional)</span></h2>
+        <p className="mb-3 text-sm text-slate-500">Relief stock sent with the team is reserved when you confirm and returned if the assignment is cancelled.</p>
+        {resources.error && !resources.data ? <ErrorBanner message={`Resource stock is unavailable. ${resources.error}`} onRetry={resources.reload} />
+          : !resources.data ? <Loading label="Loading resources…" />
+            : <SupportResourcePicker resources={resources.data} selection={selection} onChange={setSelection} error={errors.supportResources} />}
       </div>
     </div>
   );
 }
 
-function ReviewStep({ details, shelter, team }) {
+function ReviewStep({ details, shelter, team, support }) {
   return (
     <div className="mx-auto max-w-xl space-y-3">
       <h2 className="text-base font-bold text-slate-800">Review Assignment</h2>
-      <p className="text-sm text-slate-600">Confirming re-checks shelter space and team availability, then marks the team as assigned.</p>
-      <Summary shelter={shelter} team={team} details={details} />
+      <p className="text-sm text-slate-600">Confirming re-checks shelter space, team availability and stock, then marks every team as assigned and reserves the resources.</p>
+      <Summary shelter={shelter} team={team} details={details} support={support} />
       {details.notes && <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600"><span className="font-semibold">Notes: </span>{details.notes}</p>}
     </div>
   );

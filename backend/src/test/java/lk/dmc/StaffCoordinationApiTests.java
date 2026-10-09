@@ -210,6 +210,45 @@ class StaffCoordinationApiTests {
         }
 
         @Test
+        void commFailureIsEscalatedReassignedAndAlertCleared() throws Exception {
+            String body = mvc.perform(post("/api/staff/resources-shelters/team-assignments").header("Authorization", "Bearer officer-token")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"teamId\":\"RT-003\",\"shelterId\":\"SH-009\",\"expectedEvacuees\":10,\"pickupLocation\":\"Wellawatte\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+            String id = com.jayway.jsonpath.JsonPath.read(body, "$.id");
+            String base = "/api/staff/resources-shelters/team-assignments/" + id;
+            mvc.perform(post(base + "/comm-failure").header("Authorization", "Bearer officer-token"))
+                .andExpect(status().isConflict());
+            mvc.perform(post(base + "/dispatch").header("Authorization", "Bearer officer-token"))
+                .andExpect(status().isOk());
+            mvc.perform(post(base + "/comm-failure").header("Authorization", "Bearer officer-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMM_FAILURE"));
+            mvc.perform(get("/api/staff/resources-shelters/alerts").header("Authorization", "Bearer officer-token"))
+                .andExpect(jsonPath("$.teamAlerts[?(@.assignmentId == '" + id + "')]").exists());
+            mvc.perform(post(base + "/escalate").header("Authorization", "Bearer officer-token")
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"note\":\"\"}"))
+                .andExpect(status().isBadRequest());
+            mvc.perform(post(base + "/escalate").header("Authorization", "Bearer officer-token")
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"note\":\"No contact\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.escalatedAt").exists());
+            mvc.perform(post(base + "/reassign").header("Authorization", "Bearer officer-token")
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"teamId\":\"RT-007\"}"))
+                .andExpect(status().isConflict());
+            mvc.perform(post(base + "/reassign").header("Authorization", "Bearer officer-token")
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"teamId\":\"RT-005\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DISPATCHED"))
+                .andExpect(jsonPath("$.teamId").value("RT-005"));
+            mvc.perform(get("/api/staff/resources-shelters/teams/RT-003").header("Authorization", "Bearer officer-token"))
+                .andExpect(jsonPath("$.status").value("UNAVAILABLE"));
+            mvc.perform(get("/api/staff/resources-shelters/alerts").header("Authorization", "Bearer officer-token"))
+                .andExpect(jsonPath("$.teamAlerts[?(@.assignmentId == '" + id + "')]").doesNotExist());
+        }
+
+        @Test
         void arrivalUpdatesOccupancyAndFreesTeam() throws Exception {
             String body = mvc.perform(post("/api/staff/resources-shelters/team-assignments").header("Authorization", "Bearer officer-token")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -259,6 +298,37 @@ class StaffCoordinationApiTests {
                     .content("{\"teamId\":\"RT-007\",\"shelterId\":\"SH-009\",\"expectedEvacuees\":5,\"pickupLocation\":\"Kandy\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Team is no longer available")));
+        }
+
+        @Test
+        void supportIsAssignedAddedAndReturnedOnCancel() throws Exception {
+            String body = mvc.perform(post("/api/staff/resources-shelters/team-assignments").header("Authorization", "Bearer officer-token")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"teamId\":\"RT-001\",\"shelterId\":\"SH-009\",\"expectedEvacuees\":20,\"pickupLocation\":\"Wellawatte\","
+                        + "\"supportTeamIds\":[\"RT-002\"],\"supportResources\":[{\"resourceId\":\"RS-003\",\"quantity\":80}]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.supportTeams[0].name").value("Navy Boat Rescue Unit 4"))
+                .andExpect(jsonPath("$.supportResources[0].quantity").value(80))
+                .andReturn().getResponse().getContentAsString();
+            String id = com.jayway.jsonpath.JsonPath.read(body, "$.id");
+            String base = "/api/staff/resources-shelters/team-assignments/" + id;
+            mvc.perform(post(base + "/support").header("Authorization", "Bearer officer-token").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"supportResources\":[{\"resourceId\":\"RS-003\",\"quantity\":1000}]}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Insufficient stock")));
+            mvc.perform(post(base + "/support").header("Authorization", "Bearer officer-token").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"supportTeamIds\":[\"RT-003\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.supportTeamIds.length()").value(2));
+            mvc.perform(post(base + "/support").header("Authorization", "Bearer officer-token").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"supportTeamIds\":[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\"]}"))
+                .andExpect(status().isBadRequest());
+            mvc.perform(post(base + "/cancel").header("Authorization", "Bearer officer-token"))
+                .andExpect(status().isOk());
+            mvc.perform(get("/api/staff/resources-shelters/teams/RT-003").header("Authorization", "Bearer officer-token"))
+                .andExpect(jsonPath("$.status").value("AVAILABLE"));
+            mvc.perform(get("/api/staff/resources-shelters/resources").header("Authorization", "Bearer officer-token"))
+                .andExpect(jsonPath("$[?(@.id == 'RS-003')].available").value(580));
         }
 
         @Test

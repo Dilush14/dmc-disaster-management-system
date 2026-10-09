@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  assignmentConflictKind, availableSpace, canCancelAssignment, canRecordArrival, previewArrival, validateArrival, canDispatchAssignment, canMarkResponding, canChangeAvailability, filterAssignments, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam, checkShelterCapacity, filterTeams, validateTeamForm, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate, peopleLabel,
+  canReportCommFailure, hasCommFailure, reassignTeamOptions, validateEscalationNote, assignmentConflictKind, canAddSupport, supportResourcePayload, supportTeamOptions, toggleSupportTeam, validateSupportRequest, validateSupportResources, availableSpace, canCancelAssignment, canRecordArrival, previewArrival, validateArrival, canDispatchAssignment, canMarkResponding, canChangeAvailability, filterAssignments, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam, checkShelterCapacity, filterTeams, validateTeamForm, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate, peopleLabel,
   validateAllocationDetails, validateOccupancy, validateResourceForm, validateResourceSelection, validateShelterForm,
 } from './resourcesShelters.js';
 
@@ -97,6 +97,7 @@ test('team form validation', () => {
 test('availability cannot change while a team is on assignment', () => {
   assert.equal(canChangeAvailability({ status: 'AVAILABLE' }), true);
   assert.equal(canChangeAvailability({ status: 'COMM_FAILURE' }), true);
+  assert.equal(canChangeAvailability({ status: 'COMM_FAILURE', currentAssignmentId: 'TA-1' }), false);
   for (const status of ['ASSIGNED', 'DISPATCHED', 'RESPONDING']) assert.equal(canChangeAvailability({ status }), false);
 });
 
@@ -133,9 +134,9 @@ test('assignment conflicts and cancellation rules', () => {
   assert.deepEqual(filterAssignments(rows, { district: 'Colombo' }).map(row => row.id), ['TA-1']);
 });
 
-test('dispatch is allowed from assigned or comm failure, responding only after dispatch', () => {
+test('dispatch is allowed from assigned only, responding only after dispatch', () => {
   assert.equal(canDispatchAssignment({ status: 'ASSIGNED' }), true);
-  assert.equal(canDispatchAssignment({ status: 'COMM_FAILURE' }), true);
+  assert.equal(canDispatchAssignment({ status: 'COMM_FAILURE' }), false);
   assert.equal(canDispatchAssignment({ status: 'DISPATCHED' }), false);
   assert.equal(canDispatchAssignment(null), false);
   assert.equal(canMarkResponding({ status: 'DISPATCHED' }), true);
@@ -171,4 +172,57 @@ test('people label uses singular for one person', () => {
   assert.equal(peopleLabel(1), '1 person');
   assert.equal(peopleLabel(0), '0 people');
   assert.equal(peopleLabel(1300), '1,300 people');
+});
+
+test('support teams exclude the primary, busy and already-supporting teams', () => {
+  const teams = [
+    { id: 'RT-1', status: 'AVAILABLE' }, { id: 'RT-2', status: 'AVAILABLE' }, { id: 'RT-3', status: 'DISPATCHED' }, { id: 'RT-4', status: 'AVAILABLE' },
+  ];
+  assert.deepEqual(supportTeamOptions(teams, 'RT-1', ['RT-4']).map(team => team.id), ['RT-2']);
+  assert.deepEqual(toggleSupportTeam(['RT-2'], 'RT-4'), ['RT-2', 'RT-4']);
+  assert.deepEqual(toggleSupportTeam(['RT-2', 'RT-4'], 'RT-2'), ['RT-4']);
+  assert.deepEqual(toggleSupportTeam(['a', 'b', 'c', 'd', 'e'], 'f'), ['a', 'b', 'c', 'd', 'e']);
+});
+
+test('support resources are optional but must be whole quantities', () => {
+  assert.deepEqual(supportResourcePayload({ 'RS-1': '20', 'RS-2': '' }), [{ resourceId: 'RS-1', quantity: 20 }]);
+  assert.equal(validateSupportResources({}), '');
+  assert.match(validateSupportResources({ 'RS-1': '0' }), /whole numbers/);
+  assert.match(validateSupportResources({ 'RS-1': '1.5' }), /whole numbers/);
+  assert.match(validateSupportRequest([], {}), /at least one/);
+  assert.equal(validateSupportRequest(['RT-2'], {}), '');
+  assert.equal(validateSupportRequest([], { 'RS-1': '5' }), '');
+});
+
+test('support can be added until the team is responding and conflicts are classified', () => {
+  assert.equal(canAddSupport({ status: 'ASSIGNED' }), true);
+  assert.equal(canAddSupport({ status: 'DISPATCHED' }), true);
+  assert.equal(canAddSupport({ status: 'RESPONDING' }), false);
+  assert.equal(assignmentConflictKind({ status: 409, message: 'Insufficient stock for Medical Kits: requested 900, available 580.' }), 'stock');
+  assert.equal(assignmentConflictKind({ status: 409, message: 'Support team is no longer available: X is assigned.' }), 'support');
+});
+
+test('communication failure actions follow the assignment status', () => {
+  for (const status of ['DISPATCHED', 'RESPONDING']) assert.equal(canReportCommFailure({ status }), true);
+  for (const status of ['ASSIGNED', 'COMM_FAILURE', 'COMPLETED']) assert.equal(canReportCommFailure({ status }), false);
+  assert.equal(hasCommFailure({ status: 'COMM_FAILURE' }), true);
+  assert.equal(hasCommFailure({ status: 'DISPATCHED' }), false);
+  assert.equal(hasCommFailure(null), false);
+});
+
+test('reassign offers only available teams not already on the assignment', () => {
+  const teams = [
+    { id: 'RT-1', status: 'COMM_FAILURE' },
+    { id: 'RT-2', status: 'AVAILABLE' },
+    { id: 'RT-3', status: 'AVAILABLE' },
+    { id: 'RT-4', status: 'UNAVAILABLE' },
+  ];
+  assert.deepEqual(reassignTeamOptions(teams, { teamId: 'RT-1', supportTeamIds: ['RT-3'] }).map(team => team.id), ['RT-2']);
+  assert.deepEqual(reassignTeamOptions(null, null), []);
+});
+
+test('escalation needs a note of at most 500 characters', () => {
+  assert.notEqual(validateEscalationNote('  '), '');
+  assert.notEqual(validateEscalationNote('x'.repeat(501)), '');
+  assert.equal(validateEscalationNote('No radio contact'), '');
 });

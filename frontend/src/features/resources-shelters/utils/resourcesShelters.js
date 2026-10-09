@@ -158,7 +158,7 @@ const ON_ASSIGNMENT = ['ASSIGNED', 'DISPATCHED', 'RESPONDING'];
 
 /** Availability is managed by dispatch while a team is on an assignment, so manual toggling is blocked (mirrors the backend 409). */
 export function canChangeAvailability(team) {
-  return !ON_ASSIGNMENT.includes(team?.status);
+  return !ON_ASSIGNMENT.includes(team?.status) && !team?.currentAssignmentId;
 }
 
 export function validateTeamForm(form) {
@@ -218,6 +218,8 @@ export function assignmentConflictKind(error) {
   if (error?.status !== 409) return null;
   const message = String(error.message || '').toLowerCase();
   if (message.includes('capacity')) return 'capacity';
+  if (message.includes('stock')) return 'stock';
+  if (message.includes('support team') || message.includes('already supporting')) return 'support';
   if (message.includes('team')) return 'team';
   return null;
 }
@@ -226,9 +228,9 @@ export function canCancelAssignment(assignment) {
   return assignment?.status === 'ASSIGNED';
 }
 
-/** Assigned teams can be dispatched; a dispatch that failed to reach the team can be retried. */
+/** Only assigned teams are dispatched here; a team lost to a communication failure is re-dispatched from the failure panel. */
 export function canDispatchAssignment(assignment) {
-  return ['ASSIGNED', 'COMM_FAILURE'].includes(assignment?.status);
+  return assignment?.status === 'ASSIGNED';
 }
 
 export function canMarkResponding(assignment) {
@@ -272,4 +274,68 @@ export function previewArrival(shelter, delivered) {
 export function peopleLabel(count) {
   const n = Number(count);
   return `${n.toLocaleString()} ${n === 1 ? 'person' : 'people'}`;
+}
+
+export const MAX_SUPPORT_TEAMS = 5;
+
+/** Available teams that can join as support: never the primary team or teams already supporting. */
+export function supportTeamOptions(teams, primaryTeamId, excludeIds = []) {
+  return (teams || []).filter(team => team.status === 'AVAILABLE' && team.id !== primaryTeamId && !excludeIds.includes(team.id));
+}
+
+/** Adds or removes a support team, keeping at most `limit` selected. */
+export function toggleSupportTeam(ids, id, limit = MAX_SUPPORT_TEAMS) {
+  if (ids.includes(id)) return ids.filter(item => item !== id);
+  return ids.length >= limit ? ids : [...ids, id];
+}
+
+/** { resourceId: quantity } → [{ resourceId, quantity }], skipping blank quantities. */
+export function supportResourcePayload(selection) {
+  return Object.entries(selection || {})
+    .filter(([, quantity]) => quantity !== '' && quantity !== null && quantity !== undefined)
+    .map(([resourceId, quantity]) => ({ resourceId, quantity: Number(quantity) }));
+}
+
+/** Support resources are optional, but any quantity entered must be a whole number of 1 or more. */
+export function validateSupportResources(selection) {
+  for (const { quantity } of supportResourcePayload(selection)) {
+    if (!Number.isInteger(quantity) || quantity < 1) return 'Resource quantities must be whole numbers greater than zero.';
+  }
+  return '';
+}
+
+/** Add Support needs at least one team or resource. */
+export function validateSupportRequest(teamIds, selection) {
+  const problem = validateSupportResources(selection);
+  if (problem) return problem;
+  if (!teamIds.length && !supportResourcePayload(selection).length) return 'Choose at least one support team or resource.';
+  return '';
+}
+
+/** Support can be added until the team starts responding on the ground. */
+export function canAddSupport(assignment) {
+  return ['ASSIGNED', 'DISPATCHED'].includes(assignment?.status);
+}
+
+/** A communication failure can be reported while a team is out on the ground. */
+export function canReportCommFailure(assignment) {
+  return ['DISPATCHED', 'RESPONDING'].includes(assignment?.status);
+}
+
+/** Escalate, re-dispatch and reassign are only offered while the failure is unresolved. */
+export function hasCommFailure(assignment) {
+  return assignment?.status === 'COMM_FAILURE';
+}
+
+/** Teams that can take over an assignment: available and not already on it. */
+export function reassignTeamOptions(teams, assignment) {
+  const onAssignment = [assignment?.teamId, ...(assignment?.supportTeamIds || [])];
+  return (teams || []).filter(team => team.status === 'AVAILABLE' && !onAssignment.includes(team.id));
+}
+
+export function validateEscalationNote(note) {
+  const value = (note || '').trim();
+  if (!value) return 'Describe why this failure is being escalated.';
+  if (value.length > 500) return 'Keep the note to 500 characters or fewer.';
+  return '';
 }

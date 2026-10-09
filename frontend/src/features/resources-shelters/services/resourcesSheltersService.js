@@ -60,8 +60,16 @@ export const setTeamAvailability = (id, status) =>
 export const listTeamAssignments = options => request('/team-assignments', options);
 export const getTeamAssignment = (id, options) => request(`/team-assignments/${encodeURIComponent(id)}`, options);
 export const assignTeam = body => request('/team-assignments', { method: 'POST', body });
+export const addAssignmentSupport = (id, { supportTeamIds, supportResources }) =>
+  request(`/team-assignments/${encodeURIComponent(id)}/support`, { method: 'POST', body: { supportTeamIds, supportResources } });
 export const cancelTeamAssignment = id => request(`/team-assignments/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
 export const dispatchTeamAssignment = id => request(`/team-assignments/${encodeURIComponent(id)}/dispatch`, { method: 'POST' });
 export const markAssignmentResponding = id => request(`/team-assignments/${encodeURIComponent(id)}/responding`, { method: 'POST' });
 export const recordTeamArrival = (id, { evacueesDelivered, expectedOccupancy }) =>
   request(`/team-assignments/${encodeURIComponent(id)}/arrival`, { method: 'POST', body: { evacueesDelivered, expectedOccupancy } });
+export const reportCommFailure = id => request(`/team-assignments/${encodeURIComponent(id)}/comm-failure`, { method: 'POST' });
+export const escalateCommFailure = (id, note) =>
+  request(`/team-assignments/${encodeURIComponent(id)}/escalate`, { method: 'POST', body: { note } });
+export const redispatchTeamAssignment = id => request(`/team-assignments/${encodeURIComponent(id)}/redispatch`, { method: 'POST' });
+export const reassignTeamAssignment = (id, teamId) =>
+  request(`/team-assignments/${encodeURIComponent(id)}/reassign`, { method: 'POST', body: { teamId } });
