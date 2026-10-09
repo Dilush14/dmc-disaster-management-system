@@ -27,6 +27,12 @@ public class StaffStatisticalReportController {
         return reports.generate(request, identity);
     }
 
+    @PostMapping("/preview")
+    public Map<String, Object> preview(@RequestBody Map<String, Object> request,
+                                      @AuthenticationPrincipal PublicIdentity identity) {
+        return reports.preview(request, identity);
+    }
+
     @GetMapping
     public List<Map<String, Object>> list() {
         return reports.list();

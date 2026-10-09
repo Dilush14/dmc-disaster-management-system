@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useReportGeneration } from '../context/ReportGenerationContext';
 import ReportSectionSelector from '../components/ReportSectionSelector';
 import ReportStepper from '../components/ReportStepper';
-import { reportSectionOptions } from '../data/monitoringMockData';
+import { reportSectionOptions } from '../utils/monitoringReports.js';
 
 export default function ConfigureReportPage() {
   const navigate = useNavigate();
