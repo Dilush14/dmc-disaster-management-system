@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { MapPinCheck } from 'lucide-react';
 import { getShelter, recordTeamArrival } from '../services/resourcesSheltersService';
-import { checkShelterCapacity, previewArrival, validateArrival } from '../utils/resourcesShelters';
+import { checkShelterCapacity, peopleLabel, previewArrival, validateArrival } from '../utils/resourcesShelters';
 import { CapacityWarningDialog } from './WarningDialogs';
 import { ErrorBanner, Field, inputClass, Loading, Modal, PrimaryButton, SecondaryButton, useAsync } from './ui';
 
@@ -53,7 +53,7 @@ export default function RecordArrivalDialog({ assignment, onClose, onRecorded })
         expectedLabel="Evacuees Delivered"
         actionLabel="Adjust Number"
         onClose={onClose}
-        onViewAlternatives={() => setWarning(null)}
+        onViewAlternatives={() => { setDelivered(String(warning.available)); setWarning(null); }}
       />
     );
   }
@@ -77,7 +77,9 @@ export default function RecordArrivalDialog({ assignment, onClose, onRecorded })
           </Field>
           {preview && (
             <p className={`rounded-lg px-3 py-2 text-sm font-medium ${preview.exceedsCapacity ? 'bg-rose-50 text-rose-700' : 'bg-blue-50 text-blue-800'}`}>
-              Occupancy {count(preview.before.occupied)} → {count(preview.after.occupied)}, available {count(preview.before.available)} → {count(preview.after.available)}
+              {preview.exceedsCapacity
+                ? <>Exceeds capacity by {peopleLabel(preview.overBy)}. Only {peopleLabel(preview.before.available)} can be accommodated.</>
+                : <>Occupancy {count(preview.before.occupied)} → {count(preview.after.occupied)}, available {count(preview.before.available)} → {count(preview.after.available)}</>}
               <span className="block text-xs font-normal opacity-80">Capacity {count(shelter.data.capacity)}</span>
             </p>
           )}

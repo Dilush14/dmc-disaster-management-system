@@ -1,5 +1,6 @@
 import { AlertOctagon, AlertTriangle } from 'lucide-react';
 import { Modal, PrimaryButton, SecondaryButton } from './ui';
+import { peopleLabel } from '../utils/resourcesShelters';
 
 function Details({ rows }) {
   return (
@@ -42,7 +43,7 @@ export function CapacityWarningDialog({ warning, onClose, onViewAlternatives, ac
         [expectedLabel, warning.expected.toLocaleString()],
       ]} />
       <div className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
-        The expected number of people exceeds the available capacity by {warning.shortfall.toLocaleString()} people.
+        The expected number of people exceeds the available capacity by {peopleLabel(warning.shortfall)}.
       </div>
       <Suggestions items={['Select an alternative shelter', 'Consider opening an additional shelter', 'Reduce the number of people or split across multiple shelters']} />
     </Modal>

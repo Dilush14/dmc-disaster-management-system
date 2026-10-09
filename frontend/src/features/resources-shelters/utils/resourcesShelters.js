@@ -264,5 +264,12 @@ export function previewArrival(shelter, delivered) {
     before: { occupied, available: availableSpace(shelter) },
     after: { occupied: after, available: Math.max(0, capacity - after) },
     exceedsCapacity: after > capacity,
+    overBy: Math.max(0, after - capacity),
   };
+}
+
+/** '1 person', '5 people'. */
+export function peopleLabel(count) {
+  const n = Number(count);
+  return `${n.toLocaleString()} ${n === 1 ? 'person' : 'people'}`;
 }
