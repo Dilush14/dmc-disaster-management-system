@@ -158,7 +158,7 @@ const ON_ASSIGNMENT = ['ASSIGNED', 'DISPATCHED', 'RESPONDING'];
 
 /** Availability is managed by dispatch while a team is on an assignment, so manual toggling is blocked (mirrors the backend 409). */
 export function canChangeAvailability(team) {
-  return !ON_ASSIGNMENT.includes(team?.status);
+  return !ON_ASSIGNMENT.includes(team?.status) && !team?.currentAssignmentId;
 }
 
 export function validateTeamForm(form) {
@@ -228,9 +228,9 @@ export function canCancelAssignment(assignment) {
   return assignment?.status === 'ASSIGNED';
 }
 
-/** Assigned teams can be dispatched; a dispatch that failed to reach the team can be retried. */
+/** Only assigned teams are dispatched here; a team lost to a communication failure is re-dispatched from the failure panel. */
 export function canDispatchAssignment(assignment) {
-  return ['ASSIGNED', 'COMM_FAILURE'].includes(assignment?.status);
+  return assignment?.status === 'ASSIGNED';
 }
 
 export function canMarkResponding(assignment) {
@@ -315,4 +315,27 @@ export function validateSupportRequest(teamIds, selection) {
 /** Support can be added until the team starts responding on the ground. */
 export function canAddSupport(assignment) {
   return ['ASSIGNED', 'DISPATCHED'].includes(assignment?.status);
+}
+
+/** A communication failure can be reported while a team is out on the ground. */
+export function canReportCommFailure(assignment) {
+  return ['DISPATCHED', 'RESPONDING'].includes(assignment?.status);
+}
+
+/** Escalate, re-dispatch and reassign are only offered while the failure is unresolved. */
+export function hasCommFailure(assignment) {
+  return assignment?.status === 'COMM_FAILURE';
+}
+
+/** Teams that can take over an assignment: available and not already on it. */
+export function reassignTeamOptions(teams, assignment) {
+  const onAssignment = [assignment?.teamId, ...(assignment?.supportTeamIds || [])];
+  return (teams || []).filter(team => team.status === 'AVAILABLE' && !onAssignment.includes(team.id));
+}
+
+export function validateEscalationNote(note) {
+  const value = (note || '').trim();
+  if (!value) return 'Describe why this failure is being escalated.';
+  if (value.length > 500) return 'Keep the note to 500 characters or fewer.';
+  return '';
 }

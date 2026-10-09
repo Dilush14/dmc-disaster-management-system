@@ -67,3 +67,9 @@ export const dispatchTeamAssignment = id => request(`/team-assignments/${encodeU
 export const markAssignmentResponding = id => request(`/team-assignments/${encodeURIComponent(id)}/responding`, { method: 'POST' });
 export const recordTeamArrival = (id, { evacueesDelivered, expectedOccupancy }) =>
   request(`/team-assignments/${encodeURIComponent(id)}/arrival`, { method: 'POST', body: { evacueesDelivered, expectedOccupancy } });
+export const reportCommFailure = id => request(`/team-assignments/${encodeURIComponent(id)}/comm-failure`, { method: 'POST' });
+export const escalateCommFailure = (id, note) =>
+  request(`/team-assignments/${encodeURIComponent(id)}/escalate`, { method: 'POST', body: { note } });
+export const redispatchTeamAssignment = id => request(`/team-assignments/${encodeURIComponent(id)}/redispatch`, { method: 'POST' });
+export const reassignTeamAssignment = (id, teamId) =>
+  request(`/team-assignments/${encodeURIComponent(id)}/reassign`, { method: 'POST', body: { teamId } });

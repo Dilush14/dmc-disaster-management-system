@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, MapPinCheck, Radio, Send, Users, XCircle } from 'lucide-react';
-import { cancelTeamAssignment, dispatchTeamAssignment, getTeamAssignment, markAssignmentResponding } from '../services/resourcesSheltersService';
-import { canAddSupport, canCancelAssignment, canDispatchAssignment, canMarkResponding, canRecordArrival } from '../utils/resourcesShelters';
+import { ArrowLeft, CheckCircle2, MapPinCheck, Radio, Send, Users, WifiOff, XCircle } from 'lucide-react';
+import { cancelTeamAssignment, dispatchTeamAssignment, getTeamAssignment, markAssignmentResponding, reportCommFailure } from '../services/resourcesSheltersService';
+import { canAddSupport, canCancelAssignment, canDispatchAssignment, canMarkResponding, canRecordArrival, canReportCommFailure, hasCommFailure } from '../utils/resourcesShelters';
 import { Card, ErrorBanner, formatDateTime, Loading, Modal, PrimaryButton, SecondaryButton, StatusBadge, useAsync } from '../components/ui';
 import RecordArrivalDialog from '../components/RecordArrivalDialog';
 import AddSupportDialog from '../components/AddSupportDialog';
+import CommFailurePanel from '../components/CommFailurePanel';
 
 const actions = {
   cancel: { run: cancelTeamAssignment, success: 'Assignment cancelled; teams released and any support stock returned.' },
   dispatch: { run: dispatchTeamAssignment, success: 'Team dispatched.' },
   responding: { run: markAssignmentResponding, success: 'Team marked as responding.' },
+  commFailure: { run: reportCommFailure, success: 'Communication failure reported; a team alert has been raised.' },
 };
 
 export default function AssignmentDetailsPage() {
@@ -71,6 +73,9 @@ export default function AssignmentDetailsPage() {
           {canDispatchAssignment(assignment) && <PrimaryButton disabled={!!busy} onClick={() => setConfirming('dispatch')}><Send size={16} />Dispatch Team</PrimaryButton>}
           {canMarkResponding(assignment) && <PrimaryButton disabled={!!busy} onClick={() => perform('responding')}><Radio size={16} />{busy === 'responding' ? 'Updating…' : 'Mark Responding'}</PrimaryButton>}
           {canRecordArrival(assignment) && <PrimaryButton disabled={!!busy} onClick={() => { setActionError(null); setSuccess(''); setConfirming('arrival'); }}><MapPinCheck size={16} />Record Arrival</PrimaryButton>}
+          {canReportCommFailure(assignment) && (
+          <button type="button" disabled={!!busy} onClick={() => { setActionError(null); setSuccess(''); setConfirming('commFailure'); }} className="inline-flex items-center justify-center gap-2 rounded-lg border! border-rose-200! bg-white! px-4 py-2 text-sm font-semibold text-rose-700! hover:bg-rose-50!"><WifiOff size={16} />Report Communication Failure</button>
+          )}
           {canCancelAssignment(assignment) && (
           <button type="button" disabled={!!busy} onClick={() => setConfirming('cancel')} className="inline-flex items-center justify-center gap-2 rounded-lg border! border-rose-200! bg-white! px-4 py-2 text-sm font-semibold text-rose-700! hover:bg-rose-50!"><XCircle size={16} />Cancel Assignment</button>
           )}
@@ -78,6 +83,9 @@ export default function AssignmentDetailsPage() {
       </div>
       {success && <p role="status" className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"><CheckCircle2 size={16} />{success}</p>}
       {actionError && <ErrorBanner message={actionError.message} onRetry={() => perform(actionError.kind)} />}
+      {hasCommFailure(assignment) && (
+        <CommFailurePanel assignment={assignment} onUpdated={(updated, message) => { setData(updated); setActionError(null); setArrival(null); setSuccess(message); }} />
+      )}
       {arrival && (
         <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           <p className="flex items-center gap-2 font-semibold"><CheckCircle2 size={16} />Arrival recorded. {Number(arrival.assignment.evacueesDelivered).toLocaleString()} evacuees delivered to {arrival.shelterName}; {assignment.teamName} is available again.</p>
@@ -158,6 +166,18 @@ export default function AssignmentDetailsPage() {
           footer={<><SecondaryButton onClick={() => setConfirming(null)}>Not Yet</SecondaryButton><PrimaryButton disabled={busy === 'dispatch'} onClick={() => perform('dispatch')}>{busy === 'dispatch' ? 'Dispatching…' : 'Dispatch Team'}</PrimaryButton></>}
         >
           <p className="text-sm text-slate-600">{assignment.teamName} will be sent to {assignment.pickupLocation} to move {Number(assignment.expectedEvacuees).toLocaleString()} evacuees to {assignment.shelterName}. The assignment can no longer be cancelled once dispatched.</p>
+        </Modal>
+      )}
+
+      {confirming === 'commFailure' && (
+        <Modal
+          title="Report Communication Failure"
+          tone="red"
+          icon={<WifiOff size={28} />}
+          onClose={() => setConfirming(null)}
+          footer={<><SecondaryButton onClick={() => setConfirming(null)}>Not Yet</SecondaryButton><button type="button" disabled={busy === 'commFailure'} onClick={() => perform('commFailure')} className="inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600! px-4 py-2 text-sm font-semibold text-white! hover:bg-rose-700! disabled:cursor-not-allowed disabled:opacity-50">{busy === 'commFailure' ? 'Reporting…' : 'Report Failure'}</button></>}
+        >
+          <p className="text-sm text-slate-600">{assignment.teamName} will be flagged as unreachable and a team alert raised for {assignment.district}. You can then escalate, re-dispatch or reassign the assignment.</p>
         </Modal>
       )}
 

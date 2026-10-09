@@ -405,6 +405,71 @@ class CoordinationServiceTests {
         assertEquals("AVAILABLE", store.find(CoordinationStore.RESCUE_TEAMS, "RT-002").get("status"));
     }
 
+    @Test
+    void commFailureRaisesAlertAndRedispatchClearsIt() {
+        String id = String.valueOf(service.assignTeam(assign("RT-002", "SH-009", 10), "officer-1").get("id"));
+        assertStatus(HttpStatus.CONFLICT, () -> service.reportCommFailure(id, "officer-1", "Officer"));
+        service.dispatch(id, "officer-1");
+        var failed = service.reportCommFailure(id, "officer-1", "Officer");
+        assertEquals("COMM_FAILURE", failed.get("status"));
+        assertEquals("COMM_FAILURE", store.find(CoordinationStore.RESCUE_TEAMS, "RT-002").get("status"));
+        var alerts = teamAlerts();
+        assertEquals(1, alerts.size());
+        assertEquals("TEAM_COMM_FAILURE", alerts.get(0).get("type"));
+        assertEquals(id, alerts.get(0).get("assignmentId"));
+        assertEquals("Colombo", alerts.get(0).get("district"));
+        assertStatus(HttpStatus.CONFLICT, () -> service.dispatch(id, "officer-1"));
+
+        var escalated = service.escalate(id, new EscalationRequest("No radio contact for 30 minutes"), "officer-1", "Officer");
+        assertNotNull(escalated.get("escalatedAt"));
+        assertEquals("officer-1", escalated.get("escalatedBy"));
+        assertEquals("No radio contact for 30 minutes", escalated.get("escalationNote"));
+
+        var redispatched = service.redispatch(id, "officer-1", "Officer");
+        assertEquals("DISPATCHED", redispatched.get("status"));
+        assertEquals("DISPATCHED", store.find(CoordinationStore.RESCUE_TEAMS, "RT-002").get("status"));
+        assertTrue(teamAlerts().isEmpty());
+        assertEquals(5, ((List<?>) redispatched.get("history")).size());
+        assertStatus(HttpStatus.CONFLICT, () -> service.redispatch(id, "officer-1", "Officer"));
+    }
+
+    @Test
+    void commFailureReassignSwapsTeamsAndClearsAlert() {
+        String id = String.valueOf(service.assignTeam(supported(List.of("RT-002"), List.of()), "officer-1").get("id"));
+        service.dispatch(id, "officer-1");
+        service.markResponding(id, "officer-1");
+        service.reportCommFailure(id, "officer-1", "Officer");
+        var reassigned = service.reassign(id, new ReassignTeamRequest("RT-003"), "officer-1", "Officer");
+        assertEquals("DISPATCHED", reassigned.get("status"));
+        assertEquals("RT-003", reassigned.get("teamId"));
+        assertEquals("RT-001", reassigned.get("previousTeamId"));
+        var oldTeam = store.find(CoordinationStore.RESCUE_TEAMS, "RT-001");
+        assertEquals("UNAVAILABLE", oldTeam.get("status"));
+        assertNull(oldTeam.get("currentAssignmentId"));
+        assertEquals("DISPATCHED", store.find(CoordinationStore.RESCUE_TEAMS, "RT-003").get("status"));
+        assertEquals("DISPATCHED", store.find(CoordinationStore.RESCUE_TEAMS, "RT-002").get("status"));
+        assertTrue(teamAlerts().isEmpty());
+    }
+
+    @Test
+    void reassignToUnavailableTeamIsRejectedAndNothingChanges() {
+        String id = String.valueOf(service.assignTeam(assign("RT-002", "SH-009", 10), "officer-1").get("id"));
+        service.dispatch(id, "officer-1");
+        service.reportCommFailure(id, "officer-1", "Officer");
+        assertStatus(HttpStatus.CONFLICT, () -> service.reassign(id, new ReassignTeamRequest("RT-007"), "officer-1", "Officer"));
+        assertStatus(HttpStatus.BAD_REQUEST, () -> service.reassign(id, new ReassignTeamRequest("RT-002"), "officer-1", "Officer"));
+        assertStatus(HttpStatus.NOT_FOUND, () -> service.reassign(id, new ReassignTeamRequest("RT-NOPE"), "officer-1", "Officer"));
+        assertEquals("COMM_FAILURE", service.getAssignment(id).get("status"));
+        assertEquals("COMM_FAILURE", store.find(CoordinationStore.RESCUE_TEAMS, "RT-002").get("status"));
+        assertEquals(1, teamAlerts().size());
+        assertStatus(HttpStatus.CONFLICT, () -> service.setAvailability("RT-002", new TeamAvailabilityRequest("AVAILABLE"), "officer-1"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> teamAlerts() {
+        return (List<Map<String, Object>>) service.alerts().get("teamAlerts");
+    }
+
     private static AssignTeamRequest supported(List<String> teamIds, List<AssignTeamRequest.SupportResource> resources) {
         return new AssignTeamRequest("RT-001", "SH-009", 10, "Kolonnawa junction", "", teamIds, resources);
     }

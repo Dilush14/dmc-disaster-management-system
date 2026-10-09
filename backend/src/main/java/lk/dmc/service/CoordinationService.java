@@ -281,7 +281,7 @@ public class CoordinationService {
         return store.transaction(tx -> {
             Map<String, Object> row = requireRow(tx.get(RESCUE_TEAMS, id), "Rescue team");
             String current = String.valueOf(row.get("status"));
-            if (ON_ASSIGNMENT.contains(current))
+            if (ON_ASSIGNMENT.contains(current) || row.get("currentAssignmentId") != null)
                 throw new ResponseStatusException(HttpStatus.CONFLICT, row.get("name") + " is currently "
                     + current.toLowerCase(Locale.ROOT) + " and its availability cannot be changed until the assignment ends.");
             if (current.equals(request.status()))
@@ -432,13 +432,13 @@ public class CoordinationService {
         });
     }
 
-    /** Sends an assigned team out. Allowed from ASSIGNED, or COMM_FAILURE to retry a dispatch that did not reach the team. */
+    /** Sends an assigned team out. A team lost after a communication failure is re-sent with redispatch(), which resolves its alert. */
     public Map<String, Object> dispatch(String id, String actorId) {
         return dispatch(id, actorId, null);
     }
 
     public Map<String, Object> dispatch(String id, String actorId, String actorName) {
-        return advanceAssignment(id, Set.of("ASSIGNED", "COMM_FAILURE"), "DISPATCHED", "dispatchedAt",
+        return advanceAssignment(id, Set.of("ASSIGNED"), "DISPATCHED", "dispatchedAt",
             actorId, actorName, "Team dispatched", "Only assigned teams can be dispatched");
     }
 
@@ -518,6 +518,160 @@ public class CoordinationService {
             result.put("available", Math.max(0, capacity - occupied));
             return result;
         });
+    }
+
+    // ---- Communication failures ----
+
+    /** Records that a dispatched or responding team cannot be reached and raises a team alert, in one transaction. */
+    public Map<String, Object> reportCommFailure(String id, String actorId, String actorName) {
+        return store.transaction(tx -> {
+            Map<String, Object> assignment = requireRow(tx.get(TEAM_ASSIGNMENTS, id), "Team assignment");
+            Map<String, Map<String, Object>> teams = readTeams(tx, assignment);
+            String current = String.valueOf(assignment.get("status"));
+            if (!Set.of("DISPATCHED", "RESPONDING").contains(current))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "A communication failure can only be reported for dispatched or responding teams (this one is "
+                    + current.toLowerCase(Locale.ROOT).replace('_', ' ') + ").");
+
+            String now = now();
+            String alertId = newId("CA");
+            Map<String, Object> alert = new LinkedHashMap<>();
+            alert.put("id", alertId);
+            alert.put("type", "TEAM_COMM_FAILURE");
+            alert.put("assignmentId", id);
+            alert.put("teamName", assignment.get("teamName"));
+            alert.put("district", assignment.get("district"));
+            alert.put("createdAt", now);
+            alert.put("resolved", false);
+            tx.set(COORDINATION_ALERTS, alertId, alert);
+
+            List<Object> history = new ArrayList<>(assignment.get("history") instanceof List<?> list ? list : List.of());
+            history.add(historyEntry("COMM_FAILURE", now, actorId, actorName, "Communication with " + assignment.get("teamName") + " lost"));
+            assignment.put("status", "COMM_FAILURE");
+            assignment.put("commFailureAt", now);
+            assignment.put("commAlertId", alertId);
+            assignment.put("escalatedAt", null);
+            assignment.put("escalatedBy", null);
+            assignment.put("escalatedByName", null);
+            assignment.put("escalationNote", null);
+            assignment.put("history", history);
+            tx.set(TEAM_ASSIGNMENTS, id, assignment);
+            moveTeams(tx, teams, id, "COMM_FAILURE", now, actorId);
+            return assignment;
+        });
+    }
+
+    /** Escalates an unresolved communication failure to senior officers with a note. */
+    public Map<String, Object> escalate(String id, EscalationRequest request, String actorId, String actorName) {
+        return store.transaction(tx -> {
+            Map<String, Object> assignment = requireCommFailure(tx.get(TEAM_ASSIGNMENTS, id), "escalated");
+            String alertId = String.valueOf(assignment.get("commAlertId"));
+            Map<String, Object> alert = tx.get(COORDINATION_ALERTS, alertId);
+
+            String now = now();
+            String note = request.note().trim();
+            List<Object> history = new ArrayList<>(assignment.get("history") instanceof List<?> list ? list : List.of());
+            history.add(historyEntry("COMM_FAILURE", now, actorId, actorName, "Escalated: " + note));
+            assignment.put("escalatedAt", now);
+            assignment.put("escalatedBy", actorId);
+            assignment.put("escalatedByName", actorName);
+            assignment.put("escalationNote", note);
+            assignment.put("history", history);
+            tx.set(TEAM_ASSIGNMENTS, id, assignment);
+            if (alert != null) {
+                alert.put("escalatedAt", now);
+                tx.set(COORDINATION_ALERTS, alertId, alert);
+            }
+            return assignment;
+        });
+    }
+
+    /** Re-sends the same teams once contact is restored and resolves the alert. */
+    public Map<String, Object> redispatch(String id, String actorId, String actorName) {
+        return store.transaction(tx -> {
+            Map<String, Object> assignment = requireCommFailure(tx.get(TEAM_ASSIGNMENTS, id), "re-dispatched");
+            Map<String, Map<String, Object>> teams = readTeams(tx, assignment);
+            String alertId = String.valueOf(assignment.get("commAlertId"));
+            Map<String, Object> alert = tx.get(COORDINATION_ALERTS, alertId);
+
+            String now = now();
+            List<Object> history = new ArrayList<>(assignment.get("history") instanceof List<?> list ? list : List.of());
+            history.add(historyEntry("DISPATCHED", now, actorId, actorName, "Team re-dispatched after communication failure"));
+            assignment.put("status", "DISPATCHED");
+            assignment.put("dispatchedAt", now);
+            assignment.put("history", history);
+            tx.set(TEAM_ASSIGNMENTS, id, assignment);
+            moveTeams(tx, teams, id, "DISPATCHED", now, actorId);
+            resolveAlert(tx, alertId, alert, now, actorId);
+            return assignment;
+        });
+    }
+
+    /**
+     * Replaces an unreachable primary team with an available one: the old team becomes unavailable, the new team and the
+     * support teams are dispatched and the alert is resolved, all in one transaction.
+     */
+    public Map<String, Object> reassign(String id, ReassignTeamRequest request, String actorId, String actorName) {
+        return store.transaction(tx -> {
+            Map<String, Object> assignment = requireCommFailure(tx.get(TEAM_ASSIGNMENTS, id), "reassigned");
+            Map<String, Map<String, Object>> teams = readTeams(tx, assignment);
+            String newTeamId = request.teamId().trim();
+            Map<String, Object> newTeam = requireRow(tx.get(RESCUE_TEAMS, newTeamId), "Rescue team");
+            String alertId = String.valueOf(assignment.get("commAlertId"));
+            Map<String, Object> alert = tx.get(COORDINATION_ALERTS, alertId);
+            String oldTeamId = String.valueOf(assignment.get("teamId"));
+            if (newTeamId.equals(oldTeamId) || supportTeamIds(assignment).contains(newTeamId))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose a team that is not already on this assignment.");
+            if (!"AVAILABLE".equals(newTeam.get("status")))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Team is no longer available: " + newTeam.get("name") + " is "
+                    + String.valueOf(newTeam.get("status")).toLowerCase(Locale.ROOT).replace('_', ' ') + ".");
+
+            String now = now();
+            Map<String, Object> oldTeam = teams.remove(oldTeamId);
+            if (oldTeam != null && id.equals(oldTeam.get("currentAssignmentId"))) {
+                oldTeam.put("status", "UNAVAILABLE");
+                oldTeam.put("currentAssignmentId", null);
+                oldTeam.put("updatedAt", now);
+                oldTeam.put("updatedBy", actorId);
+                tx.set(RESCUE_TEAMS, oldTeamId, oldTeam);
+            }
+            newTeam.put("status", "DISPATCHED");
+            newTeam.put("currentAssignmentId", id);
+            newTeam.put("updatedAt", now);
+            newTeam.put("updatedBy", actorId);
+            tx.set(RESCUE_TEAMS, newTeamId, newTeam);
+            moveTeams(tx, teams, id, "DISPATCHED", now, actorId);
+
+            List<Object> history = new ArrayList<>(assignment.get("history") instanceof List<?> list ? list : List.of());
+            history.add(historyEntry("DISPATCHED", now, actorId, actorName,
+                "Reassigned from " + assignment.get("teamName") + " to " + newTeam.get("name")));
+            assignment.put("previousTeamId", oldTeamId);
+            assignment.put("previousTeamName", assignment.get("teamName"));
+            assignment.put("teamId", newTeamId);
+            assignment.put("teamName", newTeam.get("name"));
+            assignment.put("status", "DISPATCHED");
+            assignment.put("dispatchedAt", now);
+            assignment.put("history", history);
+            tx.set(TEAM_ASSIGNMENTS, id, assignment);
+            resolveAlert(tx, alertId, alert, now, actorId);
+            return assignment;
+        });
+    }
+
+    private static Map<String, Object> requireCommFailure(Map<String, Object> row, String action) {
+        Map<String, Object> assignment = requireRow(row, "Team assignment");
+        String current = String.valueOf(assignment.get("status"));
+        if (!"COMM_FAILURE".equals(current))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only assignments with a communication failure can be " + action
+                + " (this one is " + current.toLowerCase(Locale.ROOT).replace('_', ' ') + ").");
+        return assignment;
+    }
+
+    private static void resolveAlert(CoordinationStore.Tx tx, String alertId, Map<String, Object> alert, String now, String actorId) {
+        if (alert == null) return;
+        alert.put("resolved", true);
+        alert.put("resolvedAt", now);
+        alert.put("resolvedBy", actorId);
+        tx.set(COORDINATION_ALERTS, alertId, alert);
     }
 
     /** Moves an assignment and its primary and support teams to the next status together, in one transaction. */
@@ -730,7 +884,11 @@ public class CoordinationService {
                 "unit", row.get("unit"),
                 "level", num(row.get("available")) * 2 <= num(row.get("lowStockThreshold")) ? "Critical" : "Low Stock"))
             .toList();
-        return Map.of("shelterAlerts", shelterAlerts, "resourceAlerts", resourceAlerts);
+        List<Map<String, Object>> teamAlerts = store.list(COORDINATION_ALERTS).stream()
+            .filter(row -> "TEAM_COMM_FAILURE".equals(row.get("type")) && !Boolean.TRUE.equals(row.get("resolved")))
+            .sorted(Comparator.comparing((Map<String, Object> row) -> String.valueOf(row.get("createdAt"))).reversed())
+            .toList();
+        return Map.of("shelterAlerts", shelterAlerts, "resourceAlerts", resourceAlerts, "teamAlerts", teamAlerts);
     }
 
     // ---- Helpers ----

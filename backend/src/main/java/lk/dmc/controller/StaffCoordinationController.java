@@ -134,6 +134,24 @@ public class StaffCoordinationController {
                                              @AuthenticationPrincipal PublicIdentity identity) {
         return coordination.recordArrival(id, request, identity.id(), displayName(identity));
     }
+    @PostMapping("/team-assignments/{id}/comm-failure")
+    public Map<String, Object> reportCommFailure(@PathVariable String id, @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.reportCommFailure(id, identity.id(), displayName(identity));
+    }
+    @PostMapping("/team-assignments/{id}/escalate")
+    public Map<String, Object> escalate(@PathVariable String id, @Valid @RequestBody EscalationRequest request,
+                                        @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.escalate(id, request, identity.id(), displayName(identity));
+    }
+    @PostMapping("/team-assignments/{id}/redispatch")
+    public Map<String, Object> redispatch(@PathVariable String id, @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.redispatch(id, identity.id(), displayName(identity));
+    }
+    @PostMapping("/team-assignments/{id}/reassign")
+    public Map<String, Object> reassign(@PathVariable String id, @Valid @RequestBody ReassignTeamRequest request,
+                                        @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.reassign(id, request, identity.id(), displayName(identity));
+    }
 
     private static String displayName(PublicIdentity identity) {
         if (identity.name() != null && !identity.name().isBlank()) return identity.name();
