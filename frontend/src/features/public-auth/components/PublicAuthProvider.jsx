@@ -43,8 +43,17 @@ export function PublicAuthProvider({ children }) {
     setUser(identity);
   }
   async function logout() {
-    await logoutPublic();
-    setUser(null);
+    operation.current = true;
+    setError('');
+    try {
+      await logoutPublic();
+    } catch (failure) {
+      setError(publicAuthError(failure));
+    } finally {
+      setUser(null);
+      setLoading(false);
+      operation.current = false;
+    }
   }
   return <PublicAuthContext.Provider value={{ user, loading, login, logout, saveProfile, error }}>{children}</PublicAuthContext.Provider>;
 }

@@ -44,6 +44,7 @@ public class SecurityConfig {
         }))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/announcements").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/staff/registration").authenticated()
                 .requestMatchers("/api/staff/**").hasAnyRole("DMC_OFFICER", "DISTRICT_OFFICER", "RESPONSE_TEAM_MEMBER")
                 .requestMatchers("/api/public/**").hasAnyRole("CITIZEN", "COMMUNITY_VOLUNTEER")

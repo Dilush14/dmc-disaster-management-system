@@ -23,12 +23,29 @@ public class PublicProfileRepository {
                 .get()
                 .get(20, TimeUnit.SECONDS)
                 .getData();
-        }
+        } 
         catch (InterruptedException error) {
             Thread.currentThread().interrupt();
             throw unavailable();
         }
         catch (ExecutionException | TimeoutException error) {
+            throw unavailable();
+        }
+    }
+
+    public java.util.List<Map<String, Object>> findAll() {
+        try {
+            return firebase.firestore().collection("publicUsers").get()
+                .get(20, TimeUnit.SECONDS).getDocuments().stream()
+                .<Map<String, Object>>map(document -> {
+                    var result = new java.util.LinkedHashMap<String, Object>(document.getData());
+                    result.putIfAbsent("id", document.getId());
+                    return result;
+                }).toList();
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw unavailable();
+        } catch (ExecutionException | TimeoutException error) {
             throw unavailable();
         }
     }
