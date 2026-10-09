@@ -134,10 +134,11 @@ public class HazardWarningService {
     }
 
     public Map<String, Object> updateStatus(String id, String status, PublicIdentity identity) {
-        return update(id, Map.of(
-            "status", status,
-            "updatedAt", Instant.now().toString()
-        ), status.equals("Escalated") ? "Warning escalated" : "Warning cancelled", identity);
+        Map<String, Object> changes = new LinkedHashMap<>();
+        changes.put("status", status);
+        changes.put("updatedAt", Instant.now().toString());
+        return update(id, changes,
+            status.equals("Escalated") ? "Warning escalated" : "Warning cancelled", identity);
     }
 
     public Map<String, Object> update(String id, HazardWarningUpdateRequest request, PublicIdentity identity) {
