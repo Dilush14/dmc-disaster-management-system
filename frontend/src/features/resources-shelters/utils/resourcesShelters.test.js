@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  assignmentConflictKind, availableSpace, canCancelAssignment, canDispatchAssignment, canMarkResponding, canChangeAvailability, filterAssignments, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam, checkShelterCapacity, filterTeams, validateTeamForm, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate,
+  assignmentConflictKind, availableSpace, canCancelAssignment, canRecordArrival, previewArrival, validateArrival, canDispatchAssignment, canMarkResponding, canChangeAvailability, filterAssignments, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam, checkShelterCapacity, filterTeams, validateTeamForm, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate,
   validateAllocationDetails, validateOccupancy, validateResourceForm, validateResourceSelection, validateShelterForm,
 } from './resourcesShelters.js';
 
@@ -141,4 +141,26 @@ test('dispatch is allowed from assigned or comm failure, responding only after d
   assert.equal(canMarkResponding({ status: 'DISPATCHED' }), true);
   assert.equal(canMarkResponding({ status: 'ASSIGNED' }), false);
   assert.equal(canMarkResponding({ status: 'RESPONDING' }), false);
+});
+
+test('arrival preview, validation and allowed statuses', () => {
+  // Use case scenario: capacity 500, occupancy 380; 50 evacuees arrive.
+  const shelter = { capacity: 500, occupied: 380 };
+  assert.deepEqual(previewArrival(shelter, 50), {
+    before: { occupied: 380, available: 120 },
+    after: { occupied: 430, available: 70 },
+    exceedsCapacity: false,
+  });
+  assert.equal(previewArrival(shelter, 120).exceedsCapacity, false);
+  assert.equal(previewArrival(shelter, 121).exceedsCapacity, true);
+  assert.equal(previewArrival(shelter, 121).after.available, 0);
+  assert.equal(validateArrival('50'), '');
+  assert.equal(validateArrival('0'), '');
+  assert.notEqual(validateArrival(''), '');
+  assert.notEqual(validateArrival('-1'), '');
+  assert.notEqual(validateArrival('2.5'), '');
+  assert.equal(canRecordArrival({ status: 'DISPATCHED' }), true);
+  assert.equal(canRecordArrival({ status: 'RESPONDING' }), true);
+  assert.equal(canRecordArrival({ status: 'ASSIGNED' }), false);
+  assert.equal(canRecordArrival({ status: 'COMPLETED' }), false);
 });

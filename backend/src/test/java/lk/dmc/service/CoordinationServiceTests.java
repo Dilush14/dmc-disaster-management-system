@@ -266,6 +266,63 @@ class CoordinationServiceTests {
         assertStatus(HttpStatus.CONFLICT, () -> service.dispatch(id, "officer-1"));
     }
 
+    @Test
+    void arrivalUpdatesShelterCompletesAssignmentAndFreesTeam() {
+        // Use case scenario: capacity 500, occupancy 380 (120 available); 50 evacuees arrive -> 430 / 70.
+        String id = String.valueOf(service.assignTeam(assign("RT-002", "SH-009", 50), "officer-1").get("id"));
+        service.dispatch(id, "officer-1");
+        var result = service.recordArrival(id, new ArrivalRequest(50, 380), "officer-1", "Mohammed Hamza");
+        assertEquals(380L, result.get("previousOccupied"));
+        assertEquals(430L, result.get("occupied"));
+        assertEquals(120L, result.get("previousAvailable"));
+        assertEquals(70L, result.get("available"));
+
+        var assignment = service.getAssignment(id);
+        assertEquals("COMPLETED", assignment.get("status"));
+        assertEquals(50L, assignment.get("evacueesDelivered"));
+        assertNotNull(assignment.get("arrivedAt"));
+        assertNotNull(assignment.get("completedAt"));
+        assertEquals(430L, store.find(CoordinationStore.SHELTERS, "SH-009").get("occupied"));
+        var history = (List<?>) service.shelter("SH-009").get("history");
+        assertEquals(1, history.size());
+        assertTrue(String.valueOf(((Map<?, ?>) history.get(0)).get("note")).startsWith("Arrival from "));
+        var team = store.find(CoordinationStore.RESCUE_TEAMS, "RT-002");
+        assertEquals("AVAILABLE", team.get("status"));
+        assertNull(team.get("currentAssignmentId"));
+    }
+
+    @Test
+    void arrivalOverCapacityRollsBackAssignmentAndShelter() {
+        String id = String.valueOf(service.assignTeam(assign("RT-002", "SH-009", 50), "officer-1").get("id"));
+        service.dispatch(id, "officer-1");
+        service.markResponding(id, "officer-1");
+        assertStatus(HttpStatus.CONFLICT, () -> service.recordArrival(id, new ArrivalRequest(121, 380), "officer-1"));
+        assertEquals(380L, store.find(CoordinationStore.SHELTERS, "SH-009").get("occupied"));
+        assertEquals("RESPONDING", service.getAssignment(id).get("status"));
+        assertEquals("RESPONDING", store.find(CoordinationStore.RESCUE_TEAMS, "RT-002").get("status"));
+        assertTrue(((List<?>) service.shelter("SH-009").get("history")).isEmpty());
+    }
+
+    @Test
+    void arrivalWithStaleOccupancyIsRejected() {
+        String id = String.valueOf(service.assignTeam(assign("RT-002", "SH-009", 50), "officer-1").get("id"));
+        service.dispatch(id, "officer-1");
+        service.updateOccupancy("SH-009", new OccupancyUpdateRequest(400, 380));
+        assertStatus(HttpStatus.CONFLICT, () -> service.recordArrival(id, new ArrivalRequest(50, 380), "officer-1"));
+        assertEquals(400L, store.find(CoordinationStore.SHELTERS, "SH-009").get("occupied"));
+        assertEquals("DISPATCHED", service.getAssignment(id).get("status"));
+    }
+
+    @Test
+    void arrivalRequiresDispatchedOrRespondingTeam() {
+        String id = String.valueOf(service.assignTeam(assign("RT-002", "SH-009", 50), "officer-1").get("id"));
+        assertStatus(HttpStatus.CONFLICT, () -> service.recordArrival(id, new ArrivalRequest(50, 380), "officer-1"));
+        service.dispatch(id, "officer-1");
+        service.recordArrival(id, new ArrivalRequest(50, 380), "officer-1");
+        assertStatus(HttpStatus.CONFLICT, () -> service.recordArrival(id, new ArrivalRequest(10, 430), "officer-1"));
+        assertStatus(HttpStatus.NOT_FOUND, () -> service.recordArrival("TA-NOPE", new ArrivalRequest(10, 430), "officer-1"));
+    }
+
     private static AssignTeamRequest assign(String teamId, String shelterId, int expected) {
         return new AssignTeamRequest(teamId, shelterId, expected, "Kolonnawa junction", "");
     }

@@ -24,14 +24,14 @@ function Suggestions({ items }) {
 }
 
 /** Wireframe 9: the expected number of people exceeds the shelter's available space. */
-export function CapacityWarningDialog({ warning, onClose, onViewAlternatives }) {
+export function CapacityWarningDialog({ warning, onClose, onViewAlternatives, actionLabel = 'View Alternative Shelters', expectedLabel = 'Expected People' }) {
   return (
     <Modal
       title="Insufficient Shelter Capacity"
       tone="amber"
       icon={<AlertTriangle size={28} />}
       onClose={onClose}
-      footer={<><SecondaryButton onClick={onClose}>Cancel</SecondaryButton><PrimaryButton onClick={onViewAlternatives}>View Alternative Shelters</PrimaryButton></>}
+      footer={<><SecondaryButton onClick={onClose}>Cancel</SecondaryButton><PrimaryButton onClick={onViewAlternatives}>{actionLabel}</PrimaryButton></>}
     >
       <p className="mb-3 text-sm text-slate-600">The selected shelter does not have enough available capacity for the expected number of people.</p>
       <Details rows={[
@@ -39,7 +39,7 @@ export function CapacityWarningDialog({ warning, onClose, onViewAlternatives }) 
         ['Total Capacity', warning.capacity.toLocaleString()],
         ['Current Occupied', `${warning.occupied.toLocaleString()} (${warning.rate}%)`],
         ['Available Capacity', warning.available.toLocaleString()],
-        ['Expected People', warning.expected.toLocaleString()],
+        [expectedLabel, warning.expected.toLocaleString()],
       ]} />
       <div className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
         The expected number of people exceeds the available capacity by {warning.shortfall.toLocaleString()} people.

@@ -242,3 +242,27 @@ export function filterAssignments(rows, { query = '', status = 'All', district =
     && (status === 'All' || row.status === status)
     && (district === 'All' || row.district === district));
 }
+
+/** Arrival can be recorded once a team is on its way (dispatched) or already on the ground (responding). */
+export function canRecordArrival(assignment) {
+  return ['DISPATCHED', 'RESPONDING'].includes(assignment?.status);
+}
+
+export function validateArrival(value) {
+  if (value === '' || value === null || value === undefined) return 'Enter the number of evacuees delivered.';
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0) return 'Evacuees delivered must be a whole number of 0 or more.';
+  return '';
+}
+
+/** Shelter occupancy before and after an arrival, e.g. 380 → 430 occupied and 120 → 70 available. */
+export function previewArrival(shelter, delivered) {
+  const capacity = Number(shelter.capacity || 0);
+  const occupied = Number(shelter.occupied || 0);
+  const after = occupied + Number(delivered || 0);
+  return {
+    before: { occupied, available: availableSpace(shelter) },
+    after: { occupied: after, available: Math.max(0, capacity - after) },
+    exceedsCapacity: after > capacity,
+  };
+}

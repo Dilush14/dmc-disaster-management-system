@@ -124,6 +124,11 @@ public class StaffCoordinationController {
     public Map<String, Object> markResponding(@PathVariable String id, @AuthenticationPrincipal PublicIdentity identity) {
         return coordination.markResponding(id, identity.id(), displayName(identity));
     }
+    @PostMapping("/team-assignments/{id}/arrival")
+    public Map<String, Object> recordArrival(@PathVariable String id, @Valid @RequestBody ArrivalRequest request,
+                                             @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.recordArrival(id, request, identity.id(), displayName(identity));
+    }
 
     private static String displayName(PublicIdentity identity) {
         if (identity.name() != null && !identity.name().isBlank()) return identity.name();

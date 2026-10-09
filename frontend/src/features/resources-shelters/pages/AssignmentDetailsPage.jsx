@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Radio, Send, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, MapPinCheck, Radio, Send, XCircle } from 'lucide-react';
 import { cancelTeamAssignment, dispatchTeamAssignment, getTeamAssignment, markAssignmentResponding } from '../services/resourcesSheltersService';
-import { canCancelAssignment, canDispatchAssignment, canMarkResponding } from '../utils/resourcesShelters';
+import { canCancelAssignment, canDispatchAssignment, canMarkResponding, canRecordArrival } from '../utils/resourcesShelters';
 import { Card, ErrorBanner, formatDateTime, Loading, Modal, PrimaryButton, SecondaryButton, StatusBadge, useAsync } from '../components/ui';
+import RecordArrivalDialog from '../components/RecordArrivalDialog';
 
 const actions = {
   cancel: { run: cancelTeamAssignment, success: 'Assignment cancelled and the team released.' },
@@ -19,6 +20,8 @@ export default function AssignmentDetailsPage() {
   const [busy, setBusy] = useState(null);
   const [actionError, setActionError] = useState(null);
   const [success, setSuccess] = useState('');
+  // The shelter's before/after values from the last recorded arrival.
+  const [arrival, setArrival] = useState(null);
 
   if (error && !assignment) return <ErrorBanner message={`Assignment information is unavailable. ${error}`} onRetry={reload} />;
   if (loading && !assignment) return <Loading label="Loading assignment…" />;
@@ -27,6 +30,7 @@ export default function AssignmentDetailsPage() {
     setBusy(kind);
     setActionError(null);
     setSuccess('');
+    setArrival(null);
     try {
       setData(await actions[kind].run(assignment.id));
       setSuccess(actions[kind].success);
@@ -64,6 +68,7 @@ export default function AssignmentDetailsPage() {
         <div className="flex flex-wrap gap-2">
           {canDispatchAssignment(assignment) && <PrimaryButton disabled={!!busy} onClick={() => setConfirming('dispatch')}><Send size={16} />Dispatch Team</PrimaryButton>}
           {canMarkResponding(assignment) && <PrimaryButton disabled={!!busy} onClick={() => perform('responding')}><Radio size={16} />{busy === 'responding' ? 'Updating…' : 'Mark Responding'}</PrimaryButton>}
+          {canRecordArrival(assignment) && <PrimaryButton disabled={!!busy} onClick={() => { setActionError(null); setSuccess(''); setConfirming('arrival'); }}><MapPinCheck size={16} />Record Arrival</PrimaryButton>}
           {canCancelAssignment(assignment) && (
           <button type="button" disabled={!!busy} onClick={() => setConfirming('cancel')} className="inline-flex items-center justify-center gap-2 rounded-lg border! border-rose-200! bg-white! px-4 py-2 text-sm font-semibold text-rose-700! hover:bg-rose-50!"><XCircle size={16} />Cancel Assignment</button>
           )}
@@ -71,6 +76,15 @@ export default function AssignmentDetailsPage() {
       </div>
       {success && <p role="status" className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"><CheckCircle2 size={16} />{success}</p>}
       {actionError && <ErrorBanner message={actionError.message} onRetry={() => perform(actionError.kind)} />}
+      {arrival && (
+        <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <p className="flex items-center gap-2 font-semibold"><CheckCircle2 size={16} />Arrival recorded. {Number(arrival.assignment.evacueesDelivered).toLocaleString()} evacuees delivered to {arrival.shelterName}; {assignment.teamName} is available again.</p>
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1">
+            <dt className="text-emerald-700">Occupancy</dt><dd className="font-semibold">{Number(arrival.previousOccupied).toLocaleString()} → {Number(arrival.occupied).toLocaleString()} of {Number(arrival.capacity).toLocaleString()}</dd>
+            <dt className="text-emerald-700">Available</dt><dd className="font-semibold">{Number(arrival.previousAvailable).toLocaleString()} → {Number(arrival.available).toLocaleString()}</dd>
+          </dl>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="Assignment Details">
@@ -93,6 +107,14 @@ export default function AssignmentDetailsPage() {
           </ol>
         </Card>
       </div>
+
+      {confirming === 'arrival' && (
+        <RecordArrivalDialog
+          assignment={assignment}
+          onClose={() => setConfirming(null)}
+          onRecorded={result => { setData(result.assignment); setArrival(result); setConfirming(null); }}
+        />
+      )}
 
       {confirming === 'dispatch' && (
         <Modal
