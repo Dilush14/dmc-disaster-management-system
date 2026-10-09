@@ -6,6 +6,9 @@ import { authenticatedRequest } from '../../../services/api/authenticatedClient'
 import { validatePublicLogin, validatePublicSignup } from './validation';
 
 export const authConfigured = isFirebaseConfigured;
+export function getPublicWarnings() {
+  return authenticatedRequest('/api/public/warnings');
+}
 function authClient() {
   const services = getFirebaseServices();
   if (!services)
