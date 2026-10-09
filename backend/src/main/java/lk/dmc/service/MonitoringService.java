@@ -103,7 +103,8 @@ public class MonitoringService {
 
     public Map<String, Object> resources(String district) {
         var shelters = operationalData.findAll("shelters").stream().filter(item -> matchesDistrict(item, district)).toList();
-        var occupancy = operationalData.findAll("shelterOccupancyRecords").stream().filter(item -> matchesDistrict(item, district)).toList();
+        var occupancy = operationalData.findAll(lk.dmc.repository.CoordinationStore.OCCUPANCY_HISTORY).stream()
+            .filter(item -> matchesDistrict(item, district)).toList();
         var teams = operationalData.findAll("rescueTeams").stream().filter(item -> matchesDistrict(item, district)).toList();
         var resources = operationalData.findAll("reliefResources").stream().filter(item -> matchesDistrict(item, district)).toList();
         var distributions = operationalData.findAll("resourceDistributions").stream().filter(item -> matchesDistrict(item, district)).toList();
@@ -135,7 +136,7 @@ public class MonitoringService {
     }
 
     public List<Map<String, Object>> occupancyHistory(String district) {
-        return operationalData.findAll("shelterOccupancyRecords").stream()
+        return operationalData.findAll(lk.dmc.repository.CoordinationStore.OCCUPANCY_HISTORY).stream()
             .filter(item -> matchesDistrict(item, district)).toList();
     }
 

@@ -1,7 +1,10 @@
 import { getFirebaseServices } from './firebase';
 import { Platform } from 'react-native';
 
-const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8080').replace(/\/$/, '');
+const configuredBaseUrl = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '');
+const baseUrl = Platform.OS === 'web'
+  ? 'http://localhost:8080'
+  : configuredBaseUrl || 'http://10.0.2.2:8080';
 
 export async function apiRequest(path, options = {}) {
   const user = getFirebaseServices()?.auth.currentUser;
@@ -26,6 +29,19 @@ export async function getPublicProfile() {
 
 export async function getMyReports() {
   return apiRequest('/api/public/hazard-reports/my');
+}
+
+export async function getNotifications() {
+  return apiRequest('/api/public/notifications');
+}
+
+export async function getPublicWarnings() {
+  const result = await apiRequest('/api/public/warnings');
+  return result.items || [];
+}
+
+export async function markNotificationRead(id) {
+  return apiRequest(`/api/public/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' });
 }
 
 export async function getReport(id) {

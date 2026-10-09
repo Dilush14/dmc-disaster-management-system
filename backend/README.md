@@ -10,5 +10,5 @@ If Windows still cannot allocate memory, close unused applications or restart Wi
 `/api/staff/resources-shelters` covers shelters (list, details, register, edit, occupancy updates), relief resources (stock), distributions (allocate, status changes), the overview dashboard and shortage alerts.
 
 - Access requires a signed-in staff account (DMC Officer, District Officer or Response Team Member).
-- With `FIREBASE_ENABLED=false`, data lives in memory with demo seed data and resets on restart. With Firebase enabled, data lives in the `shelters`, `reliefResources`, `resourceDistributions` and `shelterOccupancyHistory` collections; set `COORDINATION_SEED=true` once to seed an empty project.
+- With `FIREBASE_ENABLED=false`, operational records are kept in an empty in-memory store and reset on restart. With Firebase enabled, live records are read and written in the `shelters`, `reliefResources`, `resourceDistributions` and `shelterOccupancyHistory` collections. No demo records are seeded automatically.
 - Occupancy updates and allocations run in transactions, so a failed write leaves the last valid values in place. Occupancy updates send the value the officer last saw (`expectedOccupancy`) and return 409 if it changed in the meantime.

@@ -7,19 +7,8 @@ import { reportService } from '../services/reportService';
 export default function GeneratedReportsPage() {
   const navigate = useNavigate();
   const { data: reports, loading, error, source, notice } = useMonitoringData(
-    async () => {
-      try {
-        return { data: await reportService.getGeneratedReports(), source: 'backend', notice: '' };
-      } catch (requestError) {
-        if (requestError.status === 401 || requestError.status === 403) throw requestError;
-        if (![undefined, 404, 503].includes(requestError.status)) throw requestError;
-        return {
-          data: reportService.getDemoReports(),
-          source: 'demo',
-          notice: 'Report history is not reachable; sample history is shown.',
-        };
-      }
-    }, 'reports-history',
+    () => reportService.getGeneratedReports().then(data => ({ data, source: 'backend', notice: '' })),
+    'reports-history',
   );
 
   if (loading || error || !reports) {

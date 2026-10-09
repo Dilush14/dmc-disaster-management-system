@@ -1,5 +1,10 @@
 export default function ReportPreview({ config, report = null }) {
   const sections = report?.sections || config.selectedSections || [];
+  const emptyMessage = 'No operational records matched this district and date range.';
+  const timeline = report?.alertTimeline || [];
+  const reached = report?.citizensReached || [];
+  const occupancy = report?.shelterOccupancy || [];
+  const distributions = report?.resourceDistribution || [];
 
   return (
     <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -15,80 +20,66 @@ export default function ReportPreview({ config, report = null }) {
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5 border-b border-slate-200 pb-4">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Disaster Response Report</div>
-          <h3 className="mt-2 text-3xl font-black text-slate-900">Sri Lanka</h3>
-          <div className="mt-2 text-sm text-slate-500">{config.dateFrom} to {config.dateTo} · {config.district}</div>
+          <h3 className="mt-2 text-3xl font-black text-slate-900">{report?.reportType || config.reportType}</h3>
+          <div className="mt-2 text-sm text-slate-500">{report?.period || `${config.dateFrom} to ${config.dateTo}`} · {report?.district || config.district}</div>
         </div>
 
         <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          Preview layout only. Operational figures are loaded and validated when the report is generated; unavailable required data will stop generation.
+          Preview figures are read from live hazard, shelter, and distribution records. Empty sections are shown as empty; no sample values are inserted.
         </p>
 
         <div className="space-y-5">
-          <section>
-            <h4 className="mb-2 text-lg font-bold text-slate-800">Executive Summary</h4>
-            <p className="text-sm leading-6 text-slate-600">The district response remains active with ongoing hazard warnings, shelter readiness, and multi-agency resource distribution across the operational region. Verified case reports continue to be monitored and response teams remain on standby for rapid intervention.</p>
-          </section>
+          {sections.includes('Verified Hazard Reports') && <section>
+            <h4 className="mb-2 text-lg font-bold text-slate-800">Verified Hazard Reports</h4>
+            <p className="text-sm text-slate-600">{report?.verifiedReportCount ?? 0} verified reports in the selected period.</p>
+          </section>}
 
-          <section>
+          {sections.includes('Hazard Warnings') && <section>
             <h4 className="mb-2 text-lg font-bold text-slate-800">Alert Timeline</h4>
-            <div className="grid gap-3 md:grid-cols-3">
-              {(report?.alertTimeline || []).slice(0, 3).map((entry, index) => (
-                <div key={`${entry.title}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <div className="text-xs uppercase tracking-[0.12em] text-slate-500">{entry.type}</div>
-                  <div className="mt-1 font-semibold text-slate-800">{entry.title}</div>
-                  <div className="mt-2 text-xs text-slate-500">{entry.date}</div>
-                </div>
-              ))}
-            </div>
-          </section>
+            {timeline.length ? <div className="space-y-2">
+              {timeline.map((entry, index) => <div key={`${entry.title}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs uppercase tracking-[0.12em] text-slate-500">{entry.type}</div>
+                <div className="mt-1 font-semibold text-slate-800">{entry.title || 'Hazard record'}</div>
+                <div className="mt-2 text-xs text-slate-500">{entry.date}</div>
+              </div>)}
+            </div> : <p className="text-sm text-slate-500">{emptyMessage}</p>}
+          </section>}
 
-          <section>
+          {sections.includes('Citizens Reached') && <section>
             <h4 className="mb-2 text-lg font-bold text-slate-800">Citizens Reached</h4>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {(report?.citizensReached || []).slice(0, 4).map((item, index) => (
-                <div key={`${item.label}-${index}`} className="rounded-xl border border-slate-200 bg-blue-50 p-3">
-                  <div className="text-xs uppercase tracking-[0.12em] text-blue-700">{item.label}</div>
-                  <div className="mt-2 text-2xl font-black text-slate-900">{item.value.toLocaleString()}</div>
-                </div>
-              ))}
-            </div>
-          </section>
+            {reached.length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {reached.map((item, index) => <div key={`${item.label}-${index}`} className="rounded-xl border border-slate-200 bg-blue-50 p-3">
+                <div className="text-xs uppercase tracking-[0.12em] text-blue-700">{item.label || 'Completed distribution'}</div>
+                <div className="mt-2 text-2xl font-black text-slate-900">{Number(item.value || 0).toLocaleString()}</div>
+                <div className="mt-1 text-xs text-slate-500">{item.district} · {item.date}</div>
+                {item.basis && <div className="mt-1 text-xs text-slate-500">{item.basis}</div>}
+              </div>)}
+            </div> : <p className="text-sm text-slate-500">{emptyMessage}</p>}
+          </section>}
 
-          <section>
-            <h4 className="mb-2 text-lg font-bold text-slate-800">Shelter Occupancy Trend</h4>
-            <div className="flex h-28 items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              {(report?.shelterOccupancy || []).map((entry, index) => (
-                <div key={`${entry.period}-${index}`} className="flex flex-1 flex-col items-center gap-2">
-                  <div className="w-full rounded-t-xl bg-blue-600" style={{ height: `${entry.occupancy}%` }} />
-                  <span className="text-[11px] text-slate-500">{entry.period}</span>
-                </div>
-              ))}
-            </div>
-          </section>
+          {sections.includes('Shelter Occupancy') && <section>
+            <h4 className="mb-2 text-lg font-bold text-slate-800">Shelter Occupancy</h4>
+            {occupancy.length ? <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="min-w-full text-left text-sm"><thead className="bg-slate-100"><tr>
+                <th className="px-3 py-2">Shelter</th><th className="px-3 py-2">District</th><th className="px-3 py-2">Occupancy / Capacity</th><th className="px-3 py-2">Recorded</th>
+              </tr></thead><tbody>{occupancy.map((entry, index) => <tr key={`${entry.shelterId}-${index}`} className="border-t border-slate-200">
+                <td className="px-3 py-2">{entry.shelterName}</td><td className="px-3 py-2">{entry.district}</td><td className="px-3 py-2">{entry.occupancy} / {entry.capacity}</td><td className="px-3 py-2">{entry.recordedAt}</td>
+              </tr>)}</tbody></table>
+            </div> : <p className="text-sm text-slate-500">{emptyMessage}</p>}
+          </section>}
 
-          <section>
+          {sections.includes('Resource Distribution') && <section>
             <h4 className="mb-2 text-lg font-bold text-slate-800">Resource Distribution by District</h4>
-            <div className="overflow-hidden rounded-xl border border-slate-200">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-slate-100 text-slate-700">
-                  <tr>
-                    <th className="px-3 py-2 font-semibold">District</th>
-                    <th className="px-3 py-2 font-semibold">Resource</th>
-                    <th className="px-3 py-2 font-semibold">Quantity</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(report?.resourceDistribution || []).slice(0, 3).map((entry, index) => (
-                    <tr key={`${entry.resource}-${index}`} className="border-t border-slate-200">
-                      <td className="px-3 py-2">{entry.district}</td>
-                      <td className="px-3 py-2">{entry.resource}</td>
-                      <td className="px-3 py-2">{entry.quantity}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+            {distributions.length ? <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="min-w-full text-left text-sm"><thead className="bg-slate-100"><tr>
+                <th className="px-3 py-2">District</th><th className="px-3 py-2">Shelter</th><th className="px-3 py-2">Items</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Date</th>
+              </tr></thead><tbody>{distributions.map((entry, index) => <tr key={`${entry.id}-${index}`} className="border-t border-slate-200">
+                <td className="px-3 py-2">{entry.district}</td><td className="px-3 py-2">{entry.shelterName}</td>
+                <td className="px-3 py-2">{(entry.items || []).map(item => `${item.name}: ${item.quantity}`).join(', ')}</td>
+                <td className="px-3 py-2">{entry.status}</td><td className="px-3 py-2">{entry.distributionDate || entry.createdAt}</td>
+              </tr>)}</tbody></table>
+            </div> : <p className="text-sm text-slate-500">{emptyMessage}</p>}
+          </section>}
         </div>
       </div>
     </div>
