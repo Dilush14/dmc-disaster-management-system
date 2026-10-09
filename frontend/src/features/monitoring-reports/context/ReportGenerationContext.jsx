@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, useState } from 'react';
-import { createReportConfig, generateReport } from '../utils/monitoringReports.js';
+import { createReportConfig } from '../utils/monitoringReports.js';
+import { reportService } from '../services/reportService';
 
 const ReportGenerationContext = createContext(null);
 
@@ -18,7 +19,7 @@ export function ReportGenerationProvider({ children }) {
     setError('');
   };
 
-  const generateReportForConfig = (config = reportConfig) => {
+  const generateReportForConfig = async (config = reportConfig) => {
     const normalized = createReportConfig(config);
     const missingData = !normalized.dateFrom || !normalized.dateTo || !normalized.selectedSections.length;
 
@@ -29,10 +30,17 @@ export function ReportGenerationProvider({ children }) {
       return { ok: false, message };
     }
 
-    const producedReport = generateReport(normalized);
-    setReportResult(producedReport);
-    setError('');
-    return { ok: true, report: producedReport };
+    try {
+      const producedReport = await reportService.generateReport(normalized);
+      setReportResult(producedReport);
+      setError('');
+      return { ok: true, report: producedReport };
+    } catch (generationError) {
+      const message = generationError.message || 'Report generation failed while compiling operational data.';
+      setReportResult(null);
+      setError(message);
+      return { ok: false, message };
+    }
   };
 
   const value = useMemo(() => ({

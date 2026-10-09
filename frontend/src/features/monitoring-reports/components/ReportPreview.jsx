@@ -19,6 +19,10 @@ export default function ReportPreview({ config, report = null }) {
           <div className="mt-2 text-sm text-slate-500">{config.dateFrom} to {config.dateTo} · {config.district}</div>
         </div>
 
+        <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Preview layout only. Operational figures are loaded and validated when the report is generated; unavailable required data will stop generation.
+        </p>
+
         <div className="space-y-5">
           <section>
             <h4 className="mb-2 text-lg font-bold text-slate-800">Executive Summary</h4>

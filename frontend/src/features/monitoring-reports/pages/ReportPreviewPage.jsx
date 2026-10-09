@@ -2,17 +2,15 @@ import { useNavigate } from 'react-router-dom';
 import { useReportGeneration } from '../context/ReportGenerationContext';
 import ReportPreview from '../components/ReportPreview';
 import ReportStepper from '../components/ReportStepper';
-import { generateReport } from '../utils/monitoringReports';
+import { generateReport } from '../utils/monitoringReports.js';
 
 export default function ReportPreviewPage() {
   const navigate = useNavigate();
   const { reportConfig, generateReportForConfig } = useReportGeneration();
 
-  const handleGenerate = () => {
-    const result = generateReportForConfig(reportConfig);
-    if (result.ok) {
-      navigate('/staff/reports/generate/progress');
-    }
+  const handleGenerate = async () => {
+    await generateReportForConfig(reportConfig);
+    navigate('/staff/reports/generate/progress');
   };
 
   const report = generateReport(reportConfig);
@@ -27,7 +25,7 @@ export default function ReportPreviewPage() {
       </div>
 
       <ReportStepper steps={['Select Type', 'Configure', 'Preview', 'Generate']} currentStep={3} />
-      <ReportPreview config={reportConfig} report={report.report || null} />
+      <ReportPreview config={reportConfig} report={report} />
 
       <div className="flex justify-between gap-3">
         <button type="button" onClick={() => navigate('/staff/reports/generate/configure')} className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-medium text-slate-700">← Back</button>

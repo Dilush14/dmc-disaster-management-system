@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, BarChart3, Bell, CheckCircle2, Clock3, MoreHorizontal, Plus, Search, Siren } from 'lucide-react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { getHazardWarnings } from '../services/hazardWarningService';
+import { warningPosition } from '../data/warnings';
 
 const severityClass = { Severe: 'bg-red-100 text-red-700', High: 'bg-orange-100 text-orange-700', Medium: 'bg-amber-100 text-amber-700', Low: 'bg-emerald-100 text-emerald-700' };
 const statusClass = { Active: 'bg-emerald-100 text-emerald-700', Scheduled: 'bg-blue-100 text-blue-700', Expired: 'bg-slate-100 text-slate-500' };
-
+const severityColor = { Severe: '#ef4444', High: '#f97316', Medium: '#f59e0b', Low: '#10b981' };
 function Stat({ icon: Icon, label, value, tone }) {
   return <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
     <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}><Icon size={20}/></div>
@@ -20,6 +23,8 @@ export default function HazardWarningsPage() {
   const [filters, setFilters] = useState({ search: '', status: '', type: '', severity: '', page: 0, size: 10 });
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [counts, setCounts] = useState({ active: 0, scheduled: 0, expired: 0 });
+  const [selectedWarning, setSelectedWarning] = useState(null);
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -28,6 +33,11 @@ export default function HazardWarningsPage() {
         setItems(result.items || []);
         setTotal(result.total || 0);
         setTotalPages(result.totalPages || 0);
+        setCounts({
+          active: result.activeCount || 0,
+          scheduled: result.scheduledCount || 0,
+          expired: result.expiredCount || 0,
+        });
       }
     }).catch(nextError => {
       if (active) setError(nextError.message);
@@ -37,12 +47,16 @@ export default function HazardWarningsPage() {
     return () => { active = false; };
   }, [filters]);
   const rows = items;
+  const mappedWarnings = useMemo(() => rows
+    .filter(item => item.status !== 'Expired')
+    .map(item => ({ warning: item, position: warningPosition(item) }))
+    .filter(item => item.position), [rows]);
   const summary = useMemo(() => ({
-    active: total ? '—' : rows.filter(item => item.status === 'Active').length,
-    scheduled: total ? '—' : rows.filter(item => item.status === 'Scheduled').length,
-    expired: total ? '—' : rows.filter(item => item.status === 'Expired').length,
+    active: counts.active,
+    scheduled: counts.scheduled,
+    expired: counts.expired,
     total,
-  }), [rows, total]);
+  }), [counts, total]);
   function changeFilter(name, value) {
     setFilters(current => ({ ...current, [name]: value, page: 0 }));
   }
@@ -62,9 +76,8 @@ export default function HazardWarningsPage() {
       {loading && <p role="status" className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">Loading warnings…</p>}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-100 p-5"><h2 className="text-lg font-bold">Current Hazard Situation</h2><span className="text-xs text-slate-500">Updated 10:45 AM</span></div>
-        <div className="relative h-72 overflow-hidden bg-[#dcebdc] p-8">
-          <div className="absolute inset-8 rounded-[42%] bg-[#b9d99c] opacity-80"/><div className="absolute left-[38%] top-[20%] h-36 w-40 rounded-[48%] bg-[#f4d35e] opacity-80"/><div className="absolute left-[48%] top-[35%] h-24 w-24 rounded-full bg-[#e76f51] opacity-80"/>
-          <div className="relative z-10 flex h-full items-center justify-center text-center text-xs font-bold text-slate-600"><span className="rounded-lg bg-white/80 px-3 py-2 shadow-sm">Sri Lanka situation map<br/><span className="font-normal">3 active hazard areas</span></span></div>
+        <div className="relative h-72 overflow-hidden bg-slate-100">
+          <HazardWarningMap warnings={mappedWarnings} selectedWarning={selectedWarning} onSelect={setSelectedWarning}/>
           <div className="absolute bottom-3 right-3 space-y-1 rounded-lg bg-white/90 p-2 text-[10px] shadow-sm"><div><span className="mr-1 inline-block h-2 w-2 rounded-full bg-red-500"/> Severe</div><div><span className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-400"/> High</div><div><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-400"/> Medium</div></div>
         </div>
       </div>
@@ -83,4 +96,41 @@ export default function HazardWarningsPage() {
       <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4 text-sm text-slate-500"><span>{total} warning{total === 1 ? '' : 's'} found</span><div className="flex items-center gap-2"><button type="button" disabled={filters.page === 0 || loading} onClick={() => setFilters(current => ({ ...current, page: current.page - 1 }))} className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold disabled:opacity-40">Previous</button><span>Page {totalPages ? filters.page + 1 : 0} of {totalPages || 0}</span><button type="button" disabled={filters.page + 1 >= totalPages || loading} onClick={() => setFilters(current => ({ ...current, page: current.page + 1 }))} className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold disabled:opacity-40">Next</button></div></div>
     </div>
   </div>;
+}
+
+function HazardWarningMap({ warnings, selectedWarning, onSelect }) {
+  const mapRef = useRef(null);
+  useEffect(() => {
+    const map = L.map(mapRef.current, { zoomControl: true, scrollWheelZoom: true });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+    const markers = warnings.map(({ warning, position }) => {
+      const marker = L.circleMarker(position, {
+        radius: selectedWarning?.id === warning.id ? 11 : 8,
+        color: '#fff',
+        weight: 2,
+        fillColor: severityColor[warning.severity] || '#64748b',
+        fillOpacity: 0.95,
+      }).addTo(map);
+      const popup = document.createElement('div');
+      const title = document.createElement('strong');
+      title.textContent = warning.title || warning.type || 'Hazard warning';
+      popup.append(title, document.createElement('br'));
+      popup.append(warning.area || 'Affected area', document.createElement('br'));
+      popup.append(`Status: ${warning.status || 'Active'}`);
+      marker.bindPopup(popup);
+      marker.on('click', () => onSelect(warning));
+      return marker;
+    });
+    if (warnings.length === 1) map.setView(warnings[0].position, 10);
+    else if (warnings.length > 1) map.fitBounds(L.latLngBounds(warnings.map(item => item.position)).pad(0.2));
+    else map.setView([7.8731, 80.7718], 7);
+    return () => {
+      markers.forEach(marker => marker.remove());
+      map.remove();
+    };
+  }, [warnings, selectedWarning?.id, onSelect]);
+  return <div ref={mapRef} className="h-full w-full" aria-label="Interactive hazard warning map"/>;
 }
