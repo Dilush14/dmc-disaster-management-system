@@ -62,6 +62,19 @@ class HazardWarningServiceTests {
     }
 
     @Test
+    void createRecordsHowManyCitizensWereNotified() {
+        Instant from = Instant.now().minusSeconds(60);
+        Map<String, Object> stored = Map.of("id", "HW-2026-ABC123", "status", "Active");
+        when(warnings.create(any(String.class), any(Map.class))).thenReturn(stored);
+        when(notifications.publishWarning(stored)).thenReturn(42);
+
+        Map<String, Object> result = service.create(request(from, from.plusSeconds(3600)), officer);
+
+        assertEquals(42, result.get("recipients"));
+        verify(warnings).update(any(String.class), eq(Map.of("recipients", 42)));
+    }
+
+    @Test
     void createKeepsWarningWhenNotificationFanoutFails() {
         Instant from = Instant.now().plusSeconds(3600);
         HazardWarningRequest request = request(from, from.plusSeconds(3600));

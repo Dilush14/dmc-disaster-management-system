@@ -23,12 +23,13 @@ public class NotificationService {
         this.delivery = delivery;
     }
 
-    public void publishWarning(Map<String, Object> warning) {
+    /** Fans the warning out to every citizen profile and returns how many were notified. */
+    public int publishWarning(Map<String, Object> warning) {
         Object channelsValue = warning.get("channels");
         boolean mobile = hasChannel(channelsValue, "MOBILE_APP");
         boolean email = hasChannel(channelsValue, "EMAIL");
         boolean sms = hasChannel(channelsValue, "SMS");
-        if (!mobile && !email && !sms) return;
+        if (!mobile && !email && !sms) return 0;
         List<Map<String, Object>> users = profiles.findAll();
         for (Map<String, Object> user : users) {
             String userId = String.valueOf(user.get("id"));
@@ -50,6 +51,7 @@ public class NotificationService {
             notifications.createIfAbsent(userId + "_" + warning.get("id"), data);
             delivery.deliver(warning, user);
         }
+        return users.size();
     }
 
     public List<Map<String, Object>> list(PublicIdentity identity) {
