@@ -1,13 +1,39 @@
 import { useNavigate } from 'react-router-dom';
 import GeneratedReportTable from '../components/GeneratedReportTable';
-import { getGeneratedReports } from '../utils/monitoringReports';
+import DataSourceNotice from '../components/DataSourceNotice';
+import useMonitoringData from '../hooks/useMonitoringData';
+import { reportService } from '../services/reportService';
 
 export default function GeneratedReportsPage() {
   const navigate = useNavigate();
-  const reports = getGeneratedReports();
+  const { data: reports, loading, error, source, notice } = useMonitoringData(
+    async () => {
+      try {
+        return { data: await reportService.getGeneratedReports(), source: 'backend', notice: '' };
+      } catch (requestError) {
+        if (requestError.status === 401 || requestError.status === 403) throw requestError;
+        if (![undefined, 404, 503].includes(requestError.status)) throw requestError;
+        return {
+          data: reportService.getDemoReports(),
+          source: 'demo',
+          notice: 'Report history is not reachable; sample history is shown.',
+        };
+      }
+    }, 'reports-history',
+  );
+
+  if (loading || error || !reports) {
+    return <div className="space-y-5"><h1 className="text-3xl font-black text-slate-900">Generated Reports</h1><DataSourceNotice loading={loading} error={error} /></div>;
+  }
+  const normalizedReports = reports.map(report => ({
+    ...report,
+    type: report.type || report.reportType,
+    period: report.period || `${report.dateFrom || ''} - ${report.dateTo || ''}`,
+  }));
 
   return (
     <div className="space-y-6">
+      <DataSourceNotice source={source} notice={notice} />
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Monitoring & Reports</div>
@@ -25,10 +51,10 @@ export default function GeneratedReportsPage() {
           </div>
         </div>
 
-        <GeneratedReportTable reports={reports} />
+        {normalizedReports.length ? <GeneratedReportTable reports={normalizedReports} onView={id => navigate(`/staff/reports/${encodeURIComponent(id)}`)} /> : <p className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">No reports have been generated yet.</p>}
 
         <div className="mt-4 flex items-center justify-between text-sm text-slate-600">
-          <span>Showing 1–3 of 3 reports</span>
+          <span>Showing {normalizedReports.length ? 1 : 0}–{normalizedReports.length} of {normalizedReports.length} reports</span>
           <div className="flex gap-2">
             <button type="button" className="rounded-lg border border-slate-200 bg-white px-2 py-1">Previous</button>
             <button type="button" className="rounded-lg border border-slate-200 bg-white px-2 py-1">Next</button>

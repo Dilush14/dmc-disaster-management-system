@@ -3,13 +3,22 @@ import MonitoringLegend from '../components/MonitoringLegend';
 import MonitoringStatCard from '../components/MonitoringStatCard';
 import RecentActivityList from '../components/RecentActivityList';
 import SituationMap from '../components/SituationMap';
-import { getMonitoringSummary } from '../utils/monitoringReports';
+import DataSourceNotice from '../components/DataSourceNotice';
+import useMonitoringData from '../hooks/useMonitoringData';
+import { monitoringService } from '../services/monitoringService';
 
 export default function MonitoringDashboardPage() {
-  const summary = getMonitoringSummary();
+  const { data: summary, loading, error, source, notice } = useMonitoringData(
+    () => monitoringService.getMonitoringSummary(), 'dashboard',
+  );
+
+  if (loading || error || !summary) {
+    return <div className="space-y-5"><h1 className="text-3xl font-black text-slate-900">Disaster Monitoring Dashboard</h1><DataSourceNotice loading={loading} error={error} /></div>;
+  }
 
   return (
     <div className="space-y-6">
+      <DataSourceNotice source={source} notice={notice} />
       <div className="flex items-center justify-between"> 
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Monitoring & Reports</div>
@@ -68,8 +77,8 @@ export default function MonitoringDashboardPage() {
             {summary.reportsByStatus.map(item => (
               <div key={item.status} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="flex items-center gap-3">
-                  <span className={`h-3 w-3 rounded-full ${item.status === 'Verified' ? 'bg-emerald-500' : item.status === 'Pending' ? 'bg-amber-500' : 'bg-red-500'}`} />
-                  <span className="text-sm font-medium text-slate-700">{item.status}</span>
+                  <span className={`h-3 w-3 rounded-full ${item.status.toLowerCase().includes('verif') ? 'bg-emerald-500' : item.status.toLowerCase().includes('pending') ? 'bg-amber-500' : 'bg-red-500'}`} />
+                    <span className="text-sm font-medium text-slate-700">{item.status.replaceAll('_', ' ')}</span>
                 </div>
                 <span className="text-lg font-bold text-slate-900">{item.count}</span>
               </div>

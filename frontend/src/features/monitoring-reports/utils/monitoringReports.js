@@ -69,7 +69,7 @@ export function generateReport(config = {}) {
   const sectionSet = reportConfig.selectedSections.length > 0 ? reportConfig.selectedSections : reportDefaults.selectedSections;
 
   const report = {
-    id: `RPT-${Date.now()}`,
+    id: 'PREVIEW',
     reportType: reportConfig.reportType,
     district: reportConfig.district,
     period: `${reportConfig.dateFrom} to ${reportConfig.dateTo}`,

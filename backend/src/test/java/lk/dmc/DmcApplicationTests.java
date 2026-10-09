@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class DmcApplicationTests {
     @Autowired MockMvc mvc;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean com.cloudinary.Cloudinary cloudinary;
     @Test
     void healthWorksWithoutFirebase() throws Exception {
         mvc.perform(get("/api/health")).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("UP"));
