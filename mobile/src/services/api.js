@@ -27,6 +27,14 @@ export async function getPublicProfile() {
   return apiRequest('/api/public/profile');
 }
 
+export async function registerPushToken(token) {
+  return apiRequest('/api/public/profile/push-token', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+}
+
 export async function getMyReports() {
   return apiRequest('/api/public/hazard-reports/my');
 }

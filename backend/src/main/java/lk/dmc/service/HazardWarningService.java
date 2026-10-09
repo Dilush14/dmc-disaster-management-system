@@ -67,10 +67,19 @@ public class HazardWarningService {
     public Map<String, Object> publicList() {
         var items = warnings.findAll().stream()
             .map(this::withCurrentStatus)
-            .filter(item -> Set.of("Active", "Scheduled").contains(item.get("status")))
+            .filter(this::isPubliclyVisible)
             .filter(item -> channelsContain(item, "WEBSITE"))
             .toList();
         return Map.of("items", items);
+    }
+
+    // Escalated warnings stay public until they run past their validity window.
+    private boolean isPubliclyVisible(Map<String, Object> item) {
+        Object status = item.get("status");
+        if (Set.of("Active", "Scheduled").contains(status)) return true;
+        if (!"Escalated".equals(status)) return false;
+        Instant validUntil = parseInstant(item.get("validUntil"));
+        return validUntil == null || Instant.now().isBefore(validUntil);
     }
 
     private boolean channelsContain(Map<String, Object> item, String channel) {

@@ -67,6 +67,18 @@ public class PublicProfileRepository {
             throw unavailable();
         }
     }
+    public void savePushToken(String uid, String token) {
+        try {
+            firebase.firestore().collection("publicUsers").document(uid)
+                .set(Map.of("expoPushToken", token), com.google.cloud.firestore.SetOptions.merge())
+                .get(20, TimeUnit.SECONDS);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw unavailable();
+        } catch (ExecutionException | TimeoutException error) {
+            throw unavailable();
+        }
+    }
     private ResponseStatusException unavailable() {
         return new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to access your profile. Please try again.");
     }
