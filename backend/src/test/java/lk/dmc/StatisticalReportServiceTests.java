@@ -82,6 +82,37 @@ class StatisticalReportServiceTests {
     }
 
     @Test
+    void verifiedHazardReportsAreCountedByDerivedDistrict() {
+        when(monitoring.hazardReports()).thenReturn(List.of(
+            Map.of("reportId", "HR-1", "status", "VERIFIED", "district", "Colombo", "latitude", 6.93, "longitude", 79.85,
+                "submittedAt", "2026-09-13T10:00:00Z"),
+            Map.of("reportId", "HR-2", "status", "PENDING_VERIFICATION", "district", "Colombo",
+                "submittedAt", "2026-09-13T11:00:00Z"),
+            Map.of("reportId", "HR-3", "status", "VERIFIED", "district", "Kandy", "submittedAt", "2026-09-13T12:00:00Z")));
+
+        var config = new java.util.LinkedHashMap<>(request("District-Wide Report"));
+        config.put("district", "Colombo");
+
+        var preview = service.preview(config, identity());
+
+        assertEquals(1L, preview.get("verifiedReportCount"));
+        assertEquals(2, preview.get("hazardReportCount"));
+    }
+
+    @Test
+    void citizensReachedIncludesWarningRecipients() {
+        when(monitoring.warnings()).thenReturn(List.of(Map.of(
+            "title", "Flood warning", "affectedAreas", List.of("Colombo"), "recipients", 120,
+            "createdAt", "2026-09-12T10:00:00Z")));
+
+        var preview = service.preview(request("District-Wide Report"), identity());
+
+        assertEquals(120L, preview.get("citizensReachedTotal"));
+        assertEquals("Citizens notified of a hazard warning",
+            ((Map<?, ?>) ((List<?>) preview.get("citizensReached")).get(0)).get("basis"));
+    }
+
+    @Test
     void previewUsesTheSameLiveDataButDoesNotPersistReport() {
         var preview = service.preview(request("District-Wide Report"), identity());
 

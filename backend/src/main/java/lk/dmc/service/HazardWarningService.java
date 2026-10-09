@@ -99,7 +99,12 @@ public class HazardWarningService {
         data.put("auditTrail", java.util.List.of(audit("Warning created", identity, now)));
         var created = warnings.create(id, data);
         try {
-            notifications.publishWarning(created);
+            int recipients = notifications.publishWarning(created);
+            if (recipients > 0) {
+                warnings.update(id, Map.of("recipients", recipients));
+                created = new LinkedHashMap<>(created);
+                created.put("recipients", recipients);
+            }
         } catch (RuntimeException error) {
             System.err.println("Warning published, but notification fan-out failed: " + error.getMessage());
         }

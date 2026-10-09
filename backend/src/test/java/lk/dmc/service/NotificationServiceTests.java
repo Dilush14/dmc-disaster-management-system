@@ -36,7 +36,7 @@ class NotificationServiceTests {
         Map<String, Object> profile = Map.of("id", "user-1", "email", "user@example.com");
         when(profiles.findAll()).thenReturn(List.of(profile));
 
-        service.publishWarning(warning);
+        org.junit.jupiter.api.Assertions.assertEquals(1, service.publishWarning(warning));
 
         verify(notifications).createIfAbsent(eq("user-1_HW-1"), any(Map.class));
         verify(delivery).deliver(warning, profile);

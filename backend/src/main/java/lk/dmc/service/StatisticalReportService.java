@@ -92,7 +92,18 @@ public class StatisticalReportService {
             if (reachedDerivedFromDistributions)
                 record.put("basis", "Expected people on a completed distribution record");
             return record;
-        }).toList();
+        }).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        // People who received hazard warnings were also reached, not just relief recipients.
+        warnings.stream().filter(item -> item.get("recipients") instanceof Number count && count.longValue() > 0)
+            .forEach(item -> {
+                var record = new LinkedHashMap<String, Object>();
+                record.put("label", value(item, "title"));
+                record.put("district", String.join(", ", strings(item.get("affectedAreas"))));
+                record.put("value", item.get("recipients"));
+                record.put("date", firstValue(item, "createdAt", "issuedOn", "validFrom"));
+                record.put("basis", "Citizens notified of a hazard warning");
+                reached.add(record);
+            });
 
         var report = new LinkedHashMap<String, Object>();
         report.put("reportName", reportType);
