@@ -56,7 +56,17 @@ export default function PublicHomePage() {
       <div className="section-heading">
         <h2>Recent Announcements</h2>
       </div>
-      <p className="mobile-hint">{warnings.length ? `${warnings.length} current warning${warnings.length === 1 ? '' : 's'} available above.` : 'There are no current website warnings.'}</p>
+      {warnings.length ? <div className="announcement-list">
+        {warnings.map(warning => <article key={warning.id}>
+          <div className="announcement-meta">
+            <strong>{warning.severity} alert</strong>
+            <small>{warning.affectedAreas?.join(', ') || 'Sri Lanka'}</small>
+          </div>
+          <h3>{warning.title}</h3>
+          <p>{warning.message}</p>
+          <small>Valid until {new Date(warning.validUntil).toLocaleString()}</small>
+        </article>)}
+      </div> : <p className="mobile-hint">There are no current website warnings.</p>}
     </section>
   </div>;
 }

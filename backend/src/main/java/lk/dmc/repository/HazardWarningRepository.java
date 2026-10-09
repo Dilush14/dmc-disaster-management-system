@@ -8,12 +8,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import lk.dmc.config.FirebaseGateway;
 import org.springframework.http.HttpStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
 import org.springframework.web.server.ResponseStatusException;
 
 @Repository
 public class HazardWarningRepository {
     private static final String COLLECTION = "hazardWarnings";
+    private static final Logger log = LoggerFactory.getLogger(HazardWarningRepository.class);
     private final FirebaseGateway firebase;
 
     public HazardWarningRepository(FirebaseGateway firebase) {
@@ -44,6 +47,7 @@ public class HazardWarningRepository {
             Thread.currentThread().interrupt();
             throw unavailable();
         } catch (ExecutionException | TimeoutException error) {
+            log.error("Failed to create hazard warning {}", id, error);
             throw unavailable();
         }
     }

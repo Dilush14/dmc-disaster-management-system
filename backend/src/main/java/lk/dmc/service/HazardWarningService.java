@@ -15,9 +15,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class HazardWarningService {
     private final HazardWarningRepository warnings;
+    private final NotificationService notifications;
 
-    public HazardWarningService(HazardWarningRepository warnings) {
+    public HazardWarningService(HazardWarningRepository warnings, NotificationService notifications) {
         this.warnings = warnings;
+        this.notifications = notifications;
     }
 
     public Map<String, Object> list(String search, String status, String type, String severity, int page, int size) {
@@ -95,7 +97,13 @@ public class HazardWarningService {
         data.put("createdBy", identity.id());
         data.put("recipients", 0);
         data.put("auditTrail", java.util.List.of(audit("Warning created", identity, now)));
-        return warnings.create(id, data);
+        var created = warnings.create(id, data);
+        try {
+            notifications.publishWarning(created);
+        } catch (RuntimeException error) {
+            System.err.println("Warning published, but notification fan-out failed: " + error.getMessage());
+        }
+        return created;
     }
 
     private String scheduledStatus(Instant validFrom, Instant validUntil) {
@@ -161,6 +169,9 @@ public class HazardWarningService {
     }
 
     private Map<String, Object> audit(String action, PublicIdentity identity, Instant at) {
-        return Map.of("action", action, "at", at.toString(), "actor", identity.email());
+        String actor = identity.email() == null || identity.email().isBlank()
+            ? identity.id()
+            : identity.email();
+        return Map.of("action", action, "at", at.toString(), "actor", actor);
     }
 }

@@ -10,9 +10,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
     @ExceptionHandler(ResponseStatusException.class)
     ResponseEntity<?> status(ResponseStatusException error) {
         return ResponseEntity.status(error.getStatusCode())
@@ -41,6 +44,7 @@ public class ApiExceptionHandler {
     }
     @ExceptionHandler(Exception.class)
     ResponseEntity<?> unavailable(Exception error) {
+        log.error("Unhandled API error", error);
         return ResponseEntity.status(503)
             .body(Map.of("message", "The service is temporarily unavailable. Please try again."));
     }

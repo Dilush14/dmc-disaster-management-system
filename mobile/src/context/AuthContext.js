@@ -57,8 +57,13 @@ export function AuthProvider({ children }) {
   }
 
   async function logout() {
-    await signOut(getFirebaseServices().auth);
-    setUser(null);
+    try {
+      await signOut(getFirebaseServices().auth);
+    } catch (failure) {
+      setError(failure.message || 'Remote sign-out failed; local session was cleared.');
+    } finally {
+      setUser(null);
+    }
   }
 
   return <AuthContext.Provider value={{ user, loading, error, login, signup, resetPassword, logout }}>{children}</AuthContext.Provider>;
