@@ -8,6 +8,14 @@ import { submitHazardReport } from '../services/api';
 import { hazards } from '../data/catalog';
 import { colors } from '../theme';
 
+function createClientRequestId() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, character => {
+    const random = Math.floor(Math.random() * 16);
+    const value = character === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
 export default function ReportFlowScreen() {
   const [step, setStep] = useState(1);
   const [values, setValues] = useState({ hazardType: '', description: '', latitude: '', longitude: '', dateTime: new Date().toISOString(), photo: null });
@@ -55,7 +63,7 @@ export default function ReportFlowScreen() {
   }
   async function submit() {
     setBusy(true);
-    try { await submitHazardReport({ ...values, clientRequestId: `${Date.now()}-${Math.random().toString(36).slice(2)}` }); setStep(5); }
+    try { await submitHazardReport({ ...values, clientRequestId: createClientRequestId() }); setStep(5); }
     catch (error) { Alert.alert('Submission failed', error.message); }
     finally { setBusy(false); }
   }
