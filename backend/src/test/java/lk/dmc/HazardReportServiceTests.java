@@ -57,6 +57,97 @@ class HazardReportServiceTests {
         assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
     }
     @Test
+    void communityVolunteerCanSubmitWithoutPhoto() {
+        var volunteer = new PublicIdentity("volunteer", "volunteer@example.com", "Volunteer", "COMMUNITY_VOLUNTEER");
+
+        var report = service.submit(request("Flood water is covering the main road."), null, volunteer);
+
+        assertEquals("COMMUNITY_VOLUNTEER", report.get("reporterRole"));
+        assertEquals("PENDING_VERIFICATION", report.get("status"));
+        assertNull(report.get("photoUrl"));
+        verify(repository).createIfAbsent(anyString(), anyMap());
+    }
+    @Test
+    void rejectsMissingRequiredReportDetailsBeforeSaving() {
+        var invalid = new HazardReportRequest("", "", null, null, null, "");
+
+        assertThrows(NullPointerException.class, () -> service.submit(invalid, null, identity));
+        verify(repository, never()).createIfAbsent(anyString(), anyMap());
+    }
+    @Test
+    void verifiesPendingReportAndRecordsReviewer() {
+        var pending = new HashMap<String, Object>(Map.of(
+            "reportId", "HR-VERIFY", "reporterId", "owner", "status", "PENDING_VERIFICATION"));
+        when(repository.find("HR-VERIFY")).thenReturn(pending);
+        when(repository.update(eq("HR-VERIFY"), anyMap())).thenAnswer(call -> {
+            pending.putAll(call.getArgument(1));
+            return pending;
+        });
+        var officer = new PublicIdentity("officer", "officer@example.com", "Officer", "DMC_OFFICER");
+
+        var result = service.verify("HR-VERIFY", officer);
+
+        assertEquals("VERIFIED", result.get("status"));
+        assertEquals("officer", result.get("reviewedBy"));
+        assertNotNull(result.get("reviewedAt"));
+        verify(repository).update(eq("HR-VERIFY"), argThat(updates -> "VERIFIED".equals(updates.get("status"))));
+    }
+    @Test
+    void rejectsReportOnlyWithAReasonAndRecordsReviewer() {
+        var pending = new HashMap<String, Object>(Map.of(
+            "reportId", "HR-REJECT", "reporterId", "owner", "status", "PENDING_VERIFICATION"));
+        when(repository.find("HR-REJECT")).thenReturn(pending);
+        when(repository.update(eq("HR-REJECT"), anyMap())).thenAnswer(call -> {
+            pending.putAll(call.getArgument(1));
+            return pending;
+        });
+        var officer = new PublicIdentity("officer", "officer@example.com", "Officer", "DMC_OFFICER");
+
+        var result = service.reject("HR-REJECT", "Location could not be verified.", officer);
+
+        assertEquals("REJECTED", result.get("status"));
+        assertEquals("Location could not be verified.", result.get("rejectionReason"));
+        assertEquals("officer", result.get("reviewedBy"));
+        assertNotNull(result.get("reviewedAt"));
+    }
+    @Test
+    void rejectionWithoutReasonLeavesReportUnchanged() {
+        var error = assertThrows(ResponseStatusException.class,
+            () -> service.reject("HR-REJECT", "  ", identity));
+
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+        verify(repository, never()).update(anyString(), anyMap());
+    }
+    @Test
+    void storageFailureDoesNotCreateAReport() {
+        var photo = new ReportPhotoStorage.Photo(new byte[] {1}, "image/png");
+        when(photos.validate(any())).thenReturn(photo);
+        doThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Storage unavailable."))
+            .when(photos).upload(anyString(), same(photo));
+
+        assertThrows(ResponseStatusException.class,
+            () -> service.submit(request("Flood water is covering the main road."), mockPhoto(), identity));
+
+        verify(repository, never()).createIfAbsent(anyString(), anyMap());
+    }
+    @Test
+    void repositoryFailureDoesNotReturnFalseSuccess() {
+        doThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Database unavailable."))
+            .when(repository).createIfAbsent(anyString(), anyMap());
+
+        assertThrows(ResponseStatusException.class,
+            () -> service.submit(request("Flood water is covering the main road."), null, identity));
+    }
+    @Test
+    void missingReportIsNotFoundWhenReadingIt() {
+        when(repository.find("HR-MISSING")).thenReturn(null);
+
+        var error = assertThrows(ResponseStatusException.class,
+            () -> service.get("HR-MISSING", identity));
+
+        assertEquals(HttpStatus.NOT_FOUND, error.getStatusCode());
+    }
+    @Test
     void reportsAndPhotosArePrivateToOwner() {
         var report = service.submit(request("Flood"), null, identity);
         String id = (String) report.get("reportId");
@@ -69,5 +160,8 @@ class HazardReportServiceTests {
             .getStatusCode());
         verify(photos, never()).download(anyString());
         assertEquals(report, service.get(id, identity));
+    }
+    private org.springframework.web.multipart.MultipartFile mockPhoto() {
+        return new org.springframework.mock.web.MockMultipartFile("photo", "photo.png", "image/png", new byte[] {1});
     }
 }

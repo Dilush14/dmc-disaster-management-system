@@ -4,7 +4,7 @@ import * as Location from 'expo-location';
 import { useMemo, useState } from 'react';
 import { Alert, Image, Pressable, Text, View } from 'react-native';
 import { Button, Card, Field, Header, Screen } from '../components/UI';
-import { submitHazardReport } from '../services/api';
+import { enqueueHazardReport, syncPendingHazardReports } from '../services/offlineReports';
 import { hazards } from '../data/catalog';
 import { colors } from '../theme';
 
@@ -63,8 +63,14 @@ export default function ReportFlowScreen() {
   }
   async function submit() {
     setBusy(true);
-    try { await submitHazardReport({ ...values, clientRequestId: createClientRequestId() }); setStep(5); }
-    catch (error) { Alert.alert('Submission failed', error.message); }
+    try {
+      const queued = await enqueueHazardReport({ ...values, clientRequestId: createClientRequestId() });
+      const sync = await syncPendingHazardReports();
+      const submitted = sync.submitted.find(item => item.clientRequestId === queued.clientRequestId);
+      if (submitted) setStep(5);
+      else Alert.alert('Saved offline', 'Your report is safely stored on this device and will be submitted automatically when the connection returns.');
+    }
+    catch (error) { Alert.alert('Could not save report', error.message); }
     finally { setBusy(false); }
   }
   if (step === 5) return <Screen><View style={{ flex: 1, justifyContent: 'center' }}><Text style={{ fontSize: 30, fontWeight: '800', color: colors.success }}>Report submitted</Text><Text style={{ color: colors.muted, marginTop: 12, lineHeight: 22 }}>Thank you for helping DMC identify hazards. Your report is now pending verification.</Text><Button title="Submit another report" onPress={() => { setValues({ hazardType: '', description: '', latitude: '', longitude: '', dateTime: new Date().toISOString(), photo: null }); setStep(1); }} /></View></Screen>;
