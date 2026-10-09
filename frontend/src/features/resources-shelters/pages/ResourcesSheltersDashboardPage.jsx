@@ -4,7 +4,7 @@ import MonitoringStatCard from '../../monitoring-reports/components/MonitoringSt
 import { getOverview } from '../services/resourcesSheltersService';
 import { occupancyBand } from '../utils/resourcesShelters';
 import ActiveResponseBanner from '../components/ActiveResponseBanner';
-import { Card, ErrorBanner, formatDateTime, Loading, PageHeader, StatusBadge, useAsync } from '../components/ui';
+import { Card, ErrorBanner, formatDateTime, Loading, Refreshing, PageHeader, StatusBadge, useAsync } from '../components/ui';
 
 const bandStyles = {
   critical: { dot: 'bg-rose-500', cell: 'bg-rose-100 text-rose-800 ring-rose-200', label: '> 90% (Critical)' },
@@ -24,6 +24,7 @@ export default function ResourcesSheltersDashboardPage() {
       <ActiveResponseBanner />
       {error && <ErrorBanner message={`Shelter information is unavailable. ${error}`} onRetry={reload} />}
       {loading && !data && <Loading label="Loading shelter information…" />}
+      {loading && data && <Refreshing />}
       {data && (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

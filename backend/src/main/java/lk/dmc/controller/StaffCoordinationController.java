@@ -110,10 +110,15 @@ public class StaffCoordinationController {
     @PostMapping("/team-assignments")
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Object> assignTeam(@Valid @RequestBody AssignTeamRequest request, @AuthenticationPrincipal PublicIdentity identity) {
-        return coordination.assignTeam(request, identity.id());
+        return coordination.assignTeam(request, identity.id(), displayName(identity));
     }
     @PostMapping("/team-assignments/{id}/cancel")
     public Map<String, Object> cancelAssignment(@PathVariable String id, @AuthenticationPrincipal PublicIdentity identity) {
-        return coordination.cancelAssignment(id, identity.id());
+        return coordination.cancelAssignment(id, identity.id(), displayName(identity));
+    }
+
+    private static String displayName(PublicIdentity identity) {
+        if (identity.name() != null && !identity.name().isBlank()) return identity.name();
+        return identity.email();
     }
 }

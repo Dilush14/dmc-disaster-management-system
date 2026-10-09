@@ -309,6 +309,10 @@ public class CoordinationService {
 
     /** Assigns an available team to move evacuees to a shelter. Capacity and team availability are re-checked inside one transaction. */
     public Map<String, Object> assignTeam(AssignTeamRequest request, String actorId) {
+        return assignTeam(request, actorId, null);
+    }
+
+    public Map<String, Object> assignTeam(AssignTeamRequest request, String actorId, String actorName) {
         return store.transaction(tx -> {
             Map<String, Object> shelter = requireRow(tx.get(SHELTERS, request.shelterId()), "Shelter");
             Map<String, Object> team = requireRow(tx.get(RESCUE_TEAMS, request.teamId()), "Rescue team");
@@ -340,7 +344,7 @@ public class CoordinationService {
             assignment.put("arrivedAt", null);
             assignment.put("completedAt", null);
             assignment.put("evacueesDelivered", 0L);
-            assignment.put("history", List.of(historyEntry("ASSIGNED", now, actorId, "Team assigned to " + shelter.get("name"))));
+            assignment.put("history", List.of(historyEntry("ASSIGNED", now, actorId, actorName, "Team assigned to " + shelter.get("name"))));
 
             team.put("status", "ASSIGNED");
             team.put("currentAssignmentId", id);
@@ -354,6 +358,10 @@ public class CoordinationService {
 
     /** Cancels an assignment that has not been dispatched yet and frees the team. */
     public Map<String, Object> cancelAssignment(String id, String actorId) {
+        return cancelAssignment(id, actorId, null);
+    }
+
+    public Map<String, Object> cancelAssignment(String id, String actorId, String actorName) {
         return store.transaction(tx -> {
             Map<String, Object> assignment = requireRow(tx.get(TEAM_ASSIGNMENTS, id), "Team assignment");
             String teamId = String.valueOf(assignment.get("teamId"));
@@ -365,7 +373,7 @@ public class CoordinationService {
 
             String now = now();
             List<Object> history = new ArrayList<>(assignment.get("history") instanceof List<?> list ? list : List.of());
-            history.add(historyEntry("CANCELLED", now, actorId, "Assignment cancelled"));
+            history.add(historyEntry("CANCELLED", now, actorId, actorName, "Assignment cancelled"));
             assignment.put("status", "CANCELLED");
             assignment.put("history", history);
             tx.set(TEAM_ASSIGNMENTS, id, assignment);
@@ -382,11 +390,12 @@ public class CoordinationService {
         });
     }
 
-    private static Map<String, Object> historyEntry(String status, String at, String by, String note) {
+    private static Map<String, Object> historyEntry(String status, String at, String by, String byName, String note) {
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("status", status);
         entry.put("at", at);
         entry.put("by", by);
+        entry.put("byName", byName);
         entry.put("note", note);
         return entry;
     }

@@ -111,11 +111,11 @@ export function Stepper({ steps, step }) {
 }
 
 export function PrimaryButton({ children, className = '', ...props }) {
-  return <button type="button" className={`inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 ${className}`} {...props}>{children}</button>;
+  return <button type="button" className={`inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600! px-4 py-2 text-sm font-semibold text-white! hover:bg-blue-700! disabled:cursor-not-allowed disabled:opacity-50 ${className}`} {...props}>{children}</button>;
 }
 
 export function SecondaryButton({ children, className = '', ...props }) {
-  return <button type="button" className={`inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 ${className}`} {...props}>{children}</button>;
+  return <button type="button" className={`inline-flex items-center justify-center gap-2 rounded-lg border! border-slate-200! bg-white! px-4 py-2 text-sm font-semibold text-slate-700! hover:bg-slate-50! disabled:cursor-not-allowed disabled:opacity-50 ${className}`} {...props}>{children}</button>;
 }
 
 export const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100';
@@ -150,6 +150,11 @@ export function ErrorBanner({ message, onRetry }) {
 
 export function Loading({ label = 'Loading…' }) {
   return <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">{label}</div>;
+}
+
+/** Shown while existing data is being reloaded, e.g. after a save. */
+export function Refreshing({ label = 'Refreshing…' }) {
+  return <div role="status" className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700"><span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />{label}</div>;
 }
 
 export function OccupancyBar({ rate }) {

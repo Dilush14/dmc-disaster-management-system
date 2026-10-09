@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
 import { listTeamAssignments } from '../services/resourcesSheltersService';
 import { ASSIGNMENT_STATUSES, filterAssignments, paginate } from '../utils/resourcesShelters';
-import { Card, ErrorBanner, formatDateTime, inputClass, Loading, PageHeader, Pagination, Select, StatusBadge, useAsync } from '../components/ui';
+import { Card, ErrorBanner, formatDateTime, inputClass, Loading, Refreshing, PageHeader, Pagination, Select, StatusBadge, useAsync } from '../components/ui';
 
 const statusLabel = status => status.charAt(0) + status.slice(1).toLowerCase().replace('_', ' ');
 
@@ -25,6 +25,7 @@ export default function TeamAssignmentsPage() {
       />
       {error && <ErrorBanner message={`Team assignments are unavailable. ${error}`} onRetry={reload} />}
       {loading && !data && <Loading label="Loading team assignments…" />}
+      {loading && data && <Refreshing />}
       {data && (
         <Card>
           <div className="mb-4 flex flex-wrap gap-2">

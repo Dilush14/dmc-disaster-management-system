@@ -4,7 +4,7 @@ import { Plus, Search, Send } from 'lucide-react';
 import { listTeams, setTeamAvailability } from '../services/resourcesSheltersService';
 import { canChangeAvailability, DISTRICTS, filterTeams, paginate, TEAM_AGENCIES, TEAM_STATUSES } from '../utils/resourcesShelters';
 import { TeamFormDialog } from '../components/FormDialogs';
-import { Card, ErrorBanner, inputClass, Loading, PageHeader, Pagination, PrimaryButton, Select, StatusBadge, useAsync } from '../components/ui';
+import { Card, ErrorBanner, inputClass, Loading, Refreshing, PageHeader, Pagination, PrimaryButton, Select, StatusBadge, useAsync } from '../components/ui';
 
 const statusLabel = status => status.charAt(0) + status.slice(1).toLowerCase().replace('_', ' ');
 
@@ -47,6 +47,7 @@ export default function RescueTeamsPage() {
       {error && <ErrorBanner message={`Rescue team information is unavailable. ${error}`} onRetry={reload} />}
       {actionError && <ErrorBanner message={actionError} />}
       {loading && !teams && <Loading label="Loading rescue teams…" />}
+      {loading && teams && <Refreshing />}
       {teams && (
         <Card>
           <div className="mb-4 flex flex-wrap gap-2">

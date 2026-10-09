@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Boxes, House } from 'lucide-react';
 import { getAlerts } from '../services/resourcesSheltersService';
-import { Card, ErrorBanner, Loading, PageHeader, StatusBadge, useAsync } from '../components/ui';
+import { Card, ErrorBanner, Loading, Refreshing, PageHeader, StatusBadge, useAsync } from '../components/ui';
 
 export default function ShortagesAlertsPage() {
   const { data, error, loading, reload } = useAsync(signal => getAlerts({ signal }), []);
@@ -11,6 +11,7 @@ export default function ShortagesAlertsPage() {
       <PageHeader title="Resource & Shelter Shortages Monitoring" subtitle="Shelters at 75% occupancy or more, and relief items at or below their low-stock threshold." />
       {error && <ErrorBanner message={`Alerts are unavailable. ${error}`} onRetry={reload} />}
       {loading && !data && <Loading label="Loading alerts…" />}
+      {loading && data && <Refreshing />}
       {data && (
         <div className="grid gap-6 lg:grid-cols-2">
           <Card title="Shelter Capacity Alerts">

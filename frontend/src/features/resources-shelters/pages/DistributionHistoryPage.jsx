@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { listDistributions, updateDistributionStatus } from '../services/resourcesSheltersService';
 import { filterDistributions, paginate } from '../utils/resourcesShelters';
-import { Card, ErrorBanner, inputClass, Loading, PageHeader, Pagination, Select, StatusBadge, formatDate, useAsync } from '../components/ui';
+import { Card, ErrorBanner, inputClass, Loading, Refreshing, PageHeader, Pagination, Select, StatusBadge, formatDate, useAsync } from '../components/ui';
 
 const nextActions = { PENDING: ['IN_TRANSIT', 'COMPLETED', 'CANCELLED'], IN_TRANSIT: ['COMPLETED', 'CANCELLED'] };
 const actionLabels = { IN_TRANSIT: 'Mark In Transit', COMPLETED: 'Mark Completed', CANCELLED: 'Cancel' };
@@ -40,6 +40,7 @@ export default function DistributionHistoryPage() {
       <PageHeader title="Resource Distribution History" subtitle="Every allocation recorded in the system." />
       {(error || actionError) && <ErrorBanner message={error || actionError} onRetry={error ? reload : undefined} />}
       {loading && !data && <Loading label="Loading distributions…" />}
+      {loading && data && <Refreshing />}
       {data && (
         <Card>
           <div className="mb-4 flex flex-wrap gap-2">

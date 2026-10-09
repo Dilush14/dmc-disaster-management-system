@@ -188,6 +188,18 @@ class CoordinationServiceTests {
     }
 
     @Test
+    void assignmentHistoryRecordsOfficerName() {
+        var assignment = service.assignTeam(assign("RT-001", "SH-009", 50), "officer-1", "Mohammed Hamza");
+        var cancelled = service.cancelAssignment(String.valueOf(assignment.get("id")), "officer-1", "Mohammed Hamza");
+        var history = (List<?>) cancelled.get("history");
+        assertEquals(2, history.size());
+        for (Object entry : history) {
+            assertEquals("officer-1", ((Map<?, ?>) entry).get("by"));
+            assertEquals("Mohammed Hamza", ((Map<?, ?>) entry).get("byName"));
+        }
+    }
+
+    @Test
     void insufficientCapacityIsRejectedAndNothingSaved() {
         // Kalutara Vidyalaya: 20 places left.
         var error = assertThrows(ResponseStatusException.class, () -> service.assignTeam(assign("RT-001", "SH-003", 21), "officer-1"));

@@ -53,7 +53,7 @@ export default function AssignmentDetailsPage() {
           <StatusBadge status={assignment.status} />
         </div>
         {canCancelAssignment(assignment) && (
-          <SecondaryButton onClick={() => setConfirming(true)} className="text-rose-700"><XCircle size={16} />Cancel Assignment</SecondaryButton>
+          <button type="button" onClick={() => setConfirming(true)} className="inline-flex items-center justify-center gap-2 rounded-lg border! border-rose-200! bg-white! px-4 py-2 text-sm font-semibold text-rose-700! hover:bg-rose-50!"><XCircle size={16} />Cancel Assignment</button>
         )}
       </div>
       {actionError && <ErrorBanner message={actionError} />}
@@ -72,7 +72,7 @@ export default function AssignmentDetailsPage() {
                 <span className={`absolute -left-[27px] top-1 h-3 w-3 rounded-full ring-4 ring-white ${index === 0 ? 'bg-blue-600' : 'bg-slate-300'}`} />
                 <div className="flex flex-wrap items-center gap-2"><StatusBadge status={entry.status} /><span className="text-xs text-slate-500">{formatDateTime(entry.at)}</span></div>
                 {entry.note && <p className="mt-1 text-sm text-slate-700">{entry.note}</p>}
-                {entry.by && <p className="text-xs text-slate-400">by {entry.by}</p>}
+                {entry.by && <p className="text-xs text-slate-400">by {entry.byName || 'staff officer'}</p>}
               </li>
             ))}
             {!history.length && <li className="text-sm text-slate-500">No status changes recorded.</li>}
@@ -86,7 +86,7 @@ export default function AssignmentDetailsPage() {
           tone="red"
           icon={<XCircle size={28} />}
           onClose={() => setConfirming(false)}
-          footer={<><SecondaryButton onClick={() => setConfirming(false)}>Keep Assignment</SecondaryButton><button type="button" disabled={cancelling} onClick={cancel} className="inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel Assignment'}</button></>}
+          footer={<><SecondaryButton onClick={() => setConfirming(false)}>Keep Assignment</SecondaryButton><button type="button" disabled={cancelling} onClick={cancel} className="inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600! px-4 py-2 text-sm font-semibold text-white! hover:bg-rose-700! disabled:cursor-not-allowed disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel Assignment'}</button></>}
         >
           <p className="text-sm text-slate-600">{assignment.teamName} will be released and marked available for other assignments. This cannot be undone.</p>
         </Modal>
