@@ -34,6 +34,8 @@ npm.cmd start
 
 Use `http://10.0.2.2:8080` for the Android emulator or replace `EXPO_PUBLIC_API_URL` with the development machine's LAN address when using a physical device. The mobile app uses Firebase Auth and the existing public Spring Boot endpoints; backend secrets must never be copied into `mobile/.env`.
 
+Hazard reports are offline-capable. When submission cannot reach the backend, the report and selected photo are stored in the app's local queue. The app retries queued reports when it starts and whenever network connectivity returns. A stable client request ID is reused for retries, so a temporary connection failure cannot create duplicate reports. Keep the app signed in while waiting for queued reports to synchronize.
+
 ## Checks and documentation
 
 - Frontend: `npm.cmd test`, `npm.cmd run build`, `npm.cmd run test:e2e` (installed Edge).
