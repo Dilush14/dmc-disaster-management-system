@@ -36,6 +36,8 @@ Use `http://10.0.2.2:8080` for the Android emulator or replace `EXPO_PUBLIC_API_
 
 Hazard reports are offline-capable. When submission cannot reach the backend, the report and selected photo are stored in the app's local queue. The app retries queued reports when it starts and whenever network connectivity returns. A stable client request ID is reused for retries, so a temporary connection failure cannot create duplicate reports. Keep the app signed in while waiting for queued reports to synchronize.
 
+Hazard warnings published with the `MOBILE_APP` channel are sent as push notifications through Expo Push, and every warning is also stored in the in-app Notifications tab. After sign-in the app asks for notification permission and registers the device's Expo push token with `PUT /api/public/profile/push-token`. Push only reaches physical devices running a development or production build, not Expo Go on Android, emulators or the web. Run `eas init` once so `app.json` has the EAS project ID needed to get a token. Each profile keeps the most recently registered device. Set `NOTIFICATIONS_PUSH_ENABLED=false` in `backend/.env` to turn push delivery off.
+
 ## Checks and documentation
 
 - Frontend: `npm.cmd test`, `npm.cmd run build`, `npm.cmd run test:e2e` (installed Edge).
@@ -44,4 +46,4 @@ Hazard reports are offline-capable. When submission cannot reach the backend, th
 - [Firebase configuration and security rules](FIREBASE_SETUP.md)
 - [Verification and remaining limitations](VERIFICATION.md)
 
-Realistic AI-generated background assets depict fictional Sri Lankan flood-response scenes. They are not documentary records. See `frontend/public/images/GENERATION.md`. The brand is DMC-inspired, not an official logo. Staff dashboard modules, live maps, notifications and emergency dispatch are not implemented.
+Realistic AI-generated background assets depict fictional Sri Lankan flood-response scenes. They are not documentary records. See `frontend/public/images/GENERATION.md`. The brand is DMC-inspired, not an official logo. Staff dashboard modules, live maps and emergency dispatch are not implemented.

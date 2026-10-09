@@ -38,4 +38,13 @@ public class PublicProfileController {
         data.put("createdAt", Instant.now().toString());
         return profiles.createIfAbsent(identity.id(), data);
     }
+    @PutMapping("/push-token") public Map<String, Object> savePushToken(@AuthenticationPrincipal PublicIdentity identity,
+        @RequestBody Map<String, String> request) {
+        String token = request.get("token");
+        if (token == null || !token.matches("Expo(nent)?PushToken\\[[^\\]]+\\]"))
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST, "A valid Expo push token is required.");
+        profiles.savePushToken(identity.id(), token);
+        return Map.of("registered", true);
+    }
 }
