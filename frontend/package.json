@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test src/utils/validation.test.js src/features/hazard-report/utils/publicFlow.test.js src/features/monitoring-reports/utils/monitoringReports.test.js",
+    "test": "node --test src/utils/validation.test.js src/features/hazard-report/utils/publicFlow.test.js src/features/monitoring-reports/utils/monitoringReports.test.js src/features/resources-shelters/utils/resourcesShelters.test.js",
     "test:e2e": "playwright test"
   },
   "dependencies": {

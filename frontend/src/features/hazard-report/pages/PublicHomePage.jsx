@@ -1,12 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Bell, ClipboardList, Info, Phone, TriangleAlert, Umbrella, UserRound } from 'lucide-react';
 import { usePublicAuth } from '../../public-auth/components/PublicAuthProvider';
 import { useHazardReport } from '../context/HazardReportContext';
+import { getPublicWarnings } from '../../public-auth/services/publicAuthService';
 export default function PublicHomePage() {
   const { user } = usePublicAuth();
   const { resetReport } = useHazardReport();
   const [notice, setNotice] = useState(false);
+  const [warnings, setWarnings] = useState([]);
+  useEffect(() => {
+    getPublicWarnings().then(result => setWarnings(result.items || [])).catch(() => setWarnings([]));
+  }, []);
   return <div className="mobile-page public-home">
     <header className="public-greeting">
       <span className="public-avatar">
@@ -26,7 +31,7 @@ export default function PublicHomePage() {
         <i/>
       </button>
     </header>
-    {notice && <p className="mobile-feedback" role="status">You have no new notifications.</p>}
+    {notice && <div className="mobile-feedback" role="status">{warnings.length ? warnings.map(warning => <p key={warning.id}><strong>{warning.title}</strong>: {warning.message}</p>) : <p>You have no new notifications.</p>}</div>}
     <section className="public-home-banner">
       <h2>Report hazards<br/>for a safer community</h2>
       <Link to="/public/report-hazard" onClick={resetReport}>Report a Hazard <ArrowRight size={17}/>
@@ -51,7 +56,17 @@ export default function PublicHomePage() {
       <div className="section-heading">
         <h2>Recent Announcements</h2>
       </div>
-      <p className="mobile-hint">For current warnings and announcements, visit the <a href="https://www.dmc.gov.lk/" target="_blank" rel="noreferrer">official DMC website</a>.</p>
+      {warnings.length ? <div className="announcement-list">
+        {warnings.map(warning => <article key={warning.id}>
+          <div className="announcement-meta">
+            <strong>{warning.severity} alert</strong>
+            <small>{warning.affectedAreas?.join(', ') || 'Sri Lanka'}</small>
+          </div>
+          <h3>{warning.title}</h3>
+          <p>{warning.message}</p>
+          <small>Valid until {new Date(warning.validUntil).toLocaleString()}</small>
+        </article>)}
+      </div> : <p className="mobile-hint">There are no current website warnings.</p>}
     </section>
   </div>;
 }

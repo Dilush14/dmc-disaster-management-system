@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { isStaffRole, observeStaffAuth, logoutStaff } from '../services/firebase/staffAuthService';
 import { registrationRoles } from '../utils/validation';
-import { Activity, AlertTriangle, BarChart3, Bell, FileText, House, LayoutDashboard, MapPinned, Search, Settings, Users } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Bell, Boxes, FileText, House, LayoutDashboard, MapPinned, Search, Settings, Users } from 'lucide-react';
 import MonitoringDashboardPage from '../features/monitoring-reports/pages/MonitoringDashboardPage';
 import DistrictResponseOverviewPage from '../features/monitoring-reports/pages/DistrictResponseOverviewPage';
 import RealtimeMonitoringPage from '../features/monitoring-reports/pages/RealtimeMonitoringPage';
@@ -21,6 +21,13 @@ import WarningSuccessPage from '../features/hazard-warnings/pages/WarningSuccess
 import StaffHazardReportsPage from '../features/staff-hazard-reports/pages/StaffHazardReportsPage';
 import StaffHazardReportDetailsPage from '../features/staff-hazard-reports/pages/StaffHazardReportDetailsPage';
 import StaffHazardReportsMapPage from '../features/staff-hazard-reports/pages/StaffHazardReportsMapPage';
+import ResourcesSheltersDashboardPage from '../features/resources-shelters/pages/ResourcesSheltersDashboardPage';
+import ShelterManagementPage from '../features/resources-shelters/pages/ShelterManagementPage';
+import ShelterDetailsPage from '../features/resources-shelters/pages/ShelterDetailsPage';
+import ResourceManagementPage from '../features/resources-shelters/pages/ResourceManagementPage';
+import AllocateResourcesPage from '../features/resources-shelters/pages/AllocateResourcesPage';
+import DistributionHistoryPage from '../features/resources-shelters/pages/DistributionHistoryPage';
+import ShortagesAlertsPage from '../features/resources-shelters/pages/ShortagesAlertsPage';
 
 const navItems = [
   { to: '/staff/monitoring', label: 'Dashboard', icon: LayoutDashboard },
@@ -29,6 +36,7 @@ const navItems = [
   { to: '/staff/monitoring/Colombo', label: 'District Overview', icon: MapPinned },
   { to: '/staff/monitoring/Colombo/realtime', label: 'Real-Time Monitoring', icon: Activity },
   { to: '/staff/monitoring/Colombo/resources', label: 'Resources & Shelters', icon: House },
+  { to: '/staff/resources-shelters', label: 'Shelter Coordination', icon: Boxes },
   { to: '/staff/reports/generate', label: 'Generate Reports', icon: FileText },
   { to: '/staff/reports/history', label: 'Generated Reports', icon: BarChart3 },
   { to: '/staff/users', label: 'Users', icon: Users },
@@ -162,6 +170,13 @@ export default function StaffRoutes() {
             <Route path="monitoring/:district" element={<DistrictResponseOverviewPage />} />
             <Route path="monitoring/:district/realtime" element={<RealtimeMonitoringPage />} />
             <Route path="monitoring/:district/resources" element={<ResourcesSheltersMonitoringPage />} />
+            <Route path="resources-shelters" element={<ResourcesSheltersDashboardPage />} />
+            <Route path="resources-shelters/shelters" element={<ShelterManagementPage />} />
+            <Route path="resources-shelters/shelters/:shelterId" element={<ShelterDetailsPage />} />
+            <Route path="resources-shelters/resources" element={<ResourceManagementPage />} />
+            <Route path="resources-shelters/allocate" element={<AllocateResourcesPage />} />
+            <Route path="resources-shelters/distributions" element={<DistributionHistoryPage />} />
+            <Route path="resources-shelters/alerts" element={<ShortagesAlertsPage />} />
             <Route path="reports/generate" element={<GenerateReportPage />} />
             <Route path="reports/generate/configure" element={<ConfigureReportPage />} />
             <Route path="reports/generate/preview" element={<ReportPreviewPage />} />

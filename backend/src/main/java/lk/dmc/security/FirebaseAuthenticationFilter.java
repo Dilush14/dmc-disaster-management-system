@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.MediaType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -16,6 +18,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.server.ResponseStatusException;
 
 public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
+    private static final Logger log = LoggerFactory.getLogger(FirebaseAuthenticationFilter.class);
     private final FirebaseIdentityService identities;
     private final ObjectMapper json;
     public FirebaseAuthenticationFilter(FirebaseIdentityService identities, ObjectMapper json) {
@@ -50,6 +53,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
                 Map.of("message", error.getReason() == null ? "Unable to authenticate." : error.getReason()));
             return;
         } catch (RuntimeException error) {
+            log.error("Unexpected authentication failure for {} {}", request.getMethod(), request.getRequestURI(), error);
             response.setStatus(503);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             json.writeValue(response.getOutputStream(),

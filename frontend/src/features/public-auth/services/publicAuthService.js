@@ -1,11 +1,14 @@
 import { browserLocalPersistence, browserSessionPersistence, createUserWithEmailAndPassword,
-  onAuthStateChanged, sendPasswordResetEmail, setPersistence, signInWithEmailAndPassword,
+  onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, setPersistence, signInWithEmailAndPassword,
   signOut, updateProfile } from 'firebase/auth';
 import { getFirebaseServices, isFirebaseConfigured } from '../../../services/firebase/config';
 import { authenticatedRequest } from '../../../services/api/authenticatedClient';
 import { validatePublicLogin, validatePublicSignup } from './validation';
 
 export const authConfigured = isFirebaseConfigured;
+export function getPublicWarnings() {
+  return authenticatedRequest('/api/public/warnings');
+}
 function authClient() {
   const services = getFirebaseServices();
   if (!services)
@@ -65,6 +68,7 @@ export async function authenticatePublic(values, signup = false) {
     const credential = await createUserWithEmailAndPassword(auth, values.email.trim(), values.password);
     try {
       await updateProfile(credential.user, { displayName: values.name.trim() });
+      await sendEmailVerification(credential.user);
       return await savePublicProfile(values);
     }
     catch {

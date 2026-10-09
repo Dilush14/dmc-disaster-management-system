@@ -44,6 +44,7 @@ public class SecurityConfig {
         }))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/announcements").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/staff/registration").authenticated()
                 .requestMatchers("/api/staff/**").hasAnyRole("DMC_OFFICER", "DISTRICT_OFFICER", "RESPONSE_TEAM_MEMBER")
                 .requestMatchers("/api/public/**").hasAnyRole("CITIZEN", "COMMUNITY_VOLUNTEER")
@@ -55,7 +56,7 @@ public class SecurityConfig {
     CorsConfigurationSource corsConfigurationSource(@Value("${app.cors.allowed-origins}") String origins) {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(Arrays.stream(origins.split(",")).map(String::trim).toList());
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         config.setAllowCredentials(false);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
