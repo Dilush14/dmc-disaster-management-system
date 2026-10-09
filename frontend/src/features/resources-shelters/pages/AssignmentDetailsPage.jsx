@@ -1,32 +1,41 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, XCircle } from 'lucide-react';
-import { cancelTeamAssignment, getTeamAssignment } from '../services/resourcesSheltersService';
-import { canCancelAssignment } from '../utils/resourcesShelters';
-import { Card, ErrorBanner, formatDateTime, Loading, Modal, SecondaryButton, StatusBadge, useAsync } from '../components/ui';
+import { ArrowLeft, CheckCircle2, Radio, Send, XCircle } from 'lucide-react';
+import { cancelTeamAssignment, dispatchTeamAssignment, getTeamAssignment, markAssignmentResponding } from '../services/resourcesSheltersService';
+import { canCancelAssignment, canDispatchAssignment, canMarkResponding } from '../utils/resourcesShelters';
+import { Card, ErrorBanner, formatDateTime, Loading, Modal, PrimaryButton, SecondaryButton, StatusBadge, useAsync } from '../components/ui';
+
+const actions = {
+  cancel: { run: cancelTeamAssignment, success: 'Assignment cancelled and the team released.' },
+  dispatch: { run: dispatchTeamAssignment, success: 'Team dispatched.' },
+  responding: { run: markAssignmentResponding, success: 'Team marked as responding.' },
+};
 
 export default function AssignmentDetailsPage() {
   const { assignmentId } = useParams();
   const { data: assignment, error, loading, reload, setData } = useAsync(signal => getTeamAssignment(assignmentId, { signal }), [assignmentId]);
-  const [confirming, setConfirming] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
-  const [actionError, setActionError] = useState('');
+  // confirming: null | 'cancel' | 'dispatch'; busy: the action currently running.
+  const [confirming, setConfirming] = useState(null);
+  const [busy, setBusy] = useState(null);
+  const [actionError, setActionError] = useState(null);
+  const [success, setSuccess] = useState('');
 
   if (error && !assignment) return <ErrorBanner message={`Assignment information is unavailable. ${error}`} onRetry={reload} />;
   if (loading && !assignment) return <Loading label="Loading assignment…" />;
 
-  const cancel = async () => {
-    setCancelling(true);
-    setActionError('');
+  const perform = async kind => {
+    setBusy(kind);
+    setActionError(null);
+    setSuccess('');
     try {
-      setData(await cancelTeamAssignment(assignment.id));
-      setConfirming(false);
+      setData(await actions[kind].run(assignment.id));
+      setSuccess(actions[kind].success);
     } catch (failure) {
-      setActionError(failure.message);
-      setConfirming(false);
+      setActionError({ kind, message: failure.message });
       if (failure.status === 409) reload();
     } finally {
-      setCancelling(false);
+      setConfirming(null);
+      setBusy(null);
     }
   };
 
@@ -52,11 +61,16 @@ export default function AssignmentDetailsPage() {
           <h1 className="text-2xl font-black text-slate-900">{assignment.id}</h1>
           <StatusBadge status={assignment.status} />
         </div>
-        {canCancelAssignment(assignment) && (
-          <button type="button" onClick={() => setConfirming(true)} className="inline-flex items-center justify-center gap-2 rounded-lg border! border-rose-200! bg-white! px-4 py-2 text-sm font-semibold text-rose-700! hover:bg-rose-50!"><XCircle size={16} />Cancel Assignment</button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {canDispatchAssignment(assignment) && <PrimaryButton disabled={!!busy} onClick={() => setConfirming('dispatch')}><Send size={16} />Dispatch Team</PrimaryButton>}
+          {canMarkResponding(assignment) && <PrimaryButton disabled={!!busy} onClick={() => perform('responding')}><Radio size={16} />{busy === 'responding' ? 'Updating…' : 'Mark Responding'}</PrimaryButton>}
+          {canCancelAssignment(assignment) && (
+          <button type="button" disabled={!!busy} onClick={() => setConfirming('cancel')} className="inline-flex items-center justify-center gap-2 rounded-lg border! border-rose-200! bg-white! px-4 py-2 text-sm font-semibold text-rose-700! hover:bg-rose-50!"><XCircle size={16} />Cancel Assignment</button>
+          )}
+        </div>
       </div>
-      {actionError && <ErrorBanner message={actionError} />}
+      {success && <p role="status" className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"><CheckCircle2 size={16} />{success}</p>}
+      {actionError && <ErrorBanner message={actionError.message} onRetry={() => perform(actionError.kind)} />}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="Assignment Details">
@@ -80,13 +94,24 @@ export default function AssignmentDetailsPage() {
         </Card>
       </div>
 
-      {confirming && (
+      {confirming === 'dispatch' && (
+        <Modal
+          title="Dispatch Team"
+          icon={<Send size={28} />}
+          onClose={() => setConfirming(null)}
+          footer={<><SecondaryButton onClick={() => setConfirming(null)}>Not Yet</SecondaryButton><PrimaryButton disabled={busy === 'dispatch'} onClick={() => perform('dispatch')}>{busy === 'dispatch' ? 'Dispatching…' : 'Dispatch Team'}</PrimaryButton></>}
+        >
+          <p className="text-sm text-slate-600">{assignment.teamName} will be sent to {assignment.pickupLocation} to move {Number(assignment.expectedEvacuees).toLocaleString()} evacuees to {assignment.shelterName}. The assignment can no longer be cancelled once dispatched.</p>
+        </Modal>
+      )}
+
+      {confirming === 'cancel' && (
         <Modal
           title="Cancel Assignment"
           tone="red"
           icon={<XCircle size={28} />}
-          onClose={() => setConfirming(false)}
-          footer={<><SecondaryButton onClick={() => setConfirming(false)}>Keep Assignment</SecondaryButton><button type="button" disabled={cancelling} onClick={cancel} className="inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600! px-4 py-2 text-sm font-semibold text-white! hover:bg-rose-700! disabled:cursor-not-allowed disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel Assignment'}</button></>}
+          onClose={() => setConfirming(null)}
+          footer={<><SecondaryButton onClick={() => setConfirming(null)}>Keep Assignment</SecondaryButton><button type="button" disabled={busy === 'cancel'} onClick={() => perform('cancel')} className="inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600! px-4 py-2 text-sm font-semibold text-white! hover:bg-rose-700! disabled:cursor-not-allowed disabled:opacity-50">{busy === 'cancel' ? 'Cancelling…' : 'Cancel Assignment'}</button></>}
         >
           <p className="text-sm text-slate-600">{assignment.teamName} will be released and marked available for other assignments. This cannot be undone.</p>
         </Modal>

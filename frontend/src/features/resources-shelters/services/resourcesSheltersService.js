@@ -61,3 +61,5 @@ export const listTeamAssignments = options => request('/team-assignments', optio
 export const getTeamAssignment = (id, options) => request(`/team-assignments/${encodeURIComponent(id)}`, options);
 export const assignTeam = body => request('/team-assignments', { method: 'POST', body });
 export const cancelTeamAssignment = id => request(`/team-assignments/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+export const dispatchTeamAssignment = id => request(`/team-assignments/${encodeURIComponent(id)}/dispatch`, { method: 'POST' });
+export const markAssignmentResponding = id => request(`/team-assignments/${encodeURIComponent(id)}/responding`, { method: 'POST' });

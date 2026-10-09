@@ -186,6 +186,30 @@ class StaffCoordinationApiTests {
         }
 
         @Test
+        void teamAssignmentIsDispatchedThenResponding() throws Exception {
+            String body = mvc.perform(post("/api/staff/resources-shelters/team-assignments").header("Authorization", "Bearer officer-token")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"teamId\":\"RT-003\",\"shelterId\":\"SH-009\",\"expectedEvacuees\":40,\"pickupLocation\":\"Wellawatte\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+            String id = com.jayway.jsonpath.JsonPath.read(body, "$.id");
+            String base = "/api/staff/resources-shelters/team-assignments/" + id;
+            mvc.perform(post(base + "/dispatch").header("Authorization", "Bearer officer-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DISPATCHED"))
+                .andExpect(jsonPath("$.dispatchedAt").exists());
+            mvc.perform(get("/api/staff/resources-shelters/teams/RT-003").header("Authorization", "Bearer officer-token"))
+                .andExpect(jsonPath("$.status").value("DISPATCHED"));
+            mvc.perform(post(base + "/dispatch").header("Authorization", "Bearer officer-token"))
+                .andExpect(status().isConflict());
+            mvc.perform(post(base + "/responding").header("Authorization", "Bearer officer-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("RESPONDING"));
+            mvc.perform(post("/api/staff/resources-shelters/team-assignments/TA-NOPE/dispatch").header("Authorization", "Bearer officer-token"))
+                .andExpect(status().isNotFound());
+        }
+
+        @Test
         void teamAssignmentValidationAndConflicts() throws Exception {
             mvc.perform(post("/api/staff/resources-shelters/team-assignments").header("Authorization", "Bearer officer-token")
                     .contentType(MediaType.APPLICATION_JSON).content("{\"teamId\":\"RT-001\",\"shelterId\":\"SH-009\",\"expectedEvacuees\":0}"))

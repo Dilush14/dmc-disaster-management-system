@@ -116,6 +116,14 @@ public class StaffCoordinationController {
     public Map<String, Object> cancelAssignment(@PathVariable String id, @AuthenticationPrincipal PublicIdentity identity) {
         return coordination.cancelAssignment(id, identity.id(), displayName(identity));
     }
+    @PostMapping("/team-assignments/{id}/dispatch")
+    public Map<String, Object> dispatch(@PathVariable String id, @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.dispatch(id, identity.id(), displayName(identity));
+    }
+    @PostMapping("/team-assignments/{id}/responding")
+    public Map<String, Object> markResponding(@PathVariable String id, @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.markResponding(id, identity.id(), displayName(identity));
+    }
 
     private static String displayName(PublicIdentity identity) {
         if (identity.name() != null && !identity.name().isBlank()) return identity.name();

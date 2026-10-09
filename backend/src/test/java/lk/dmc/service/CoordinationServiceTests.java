@@ -233,6 +233,39 @@ class CoordinationServiceTests {
         assertStatus(HttpStatus.NOT_FOUND, () -> service.cancelAssignment("TA-NOPE", "officer-1"));
     }
 
+    @Test
+    void dispatchMovesAssignmentAndTeamTogether() {
+        String id = String.valueOf(service.assignTeam(assign("RT-002", "SH-009", 10), "officer-1").get("id"));
+        var dispatched = service.dispatch(id, "officer-1", "Mohammed Hamza");
+        assertEquals("DISPATCHED", dispatched.get("status"));
+        assertNotNull(dispatched.get("dispatchedAt"));
+        var history = (List<?>) service.getAssignment(id).get("history");
+        assertEquals(2, history.size());
+        assertEquals("DISPATCHED", ((Map<?, ?>) history.get(1)).get("status"));
+        assertEquals("DISPATCHED", store.find(CoordinationStore.RESCUE_TEAMS, "RT-002").get("status"));
+        assertStatus(HttpStatus.CONFLICT, () -> service.cancelAssignment(id, "officer-1"));
+    }
+
+    @Test
+    void secondDispatchIsRejected() {
+        String id = String.valueOf(service.assignTeam(assign("RT-002", "SH-009", 10), "officer-1").get("id"));
+        service.dispatch(id, "officer-1");
+        assertStatus(HttpStatus.CONFLICT, () -> service.dispatch(id, "officer-1"));
+        assertEquals(2, ((List<?>) service.getAssignment(id).get("history")).size());
+        assertStatus(HttpStatus.NOT_FOUND, () -> service.dispatch("TA-NOPE", "officer-1"));
+    }
+
+    @Test
+    void respondingFollowsDispatchOnly() {
+        String id = String.valueOf(service.assignTeam(assign("RT-002", "SH-009", 10), "officer-1").get("id"));
+        assertStatus(HttpStatus.CONFLICT, () -> service.markResponding(id, "officer-1"));
+        service.dispatch(id, "officer-1");
+        var responding = service.markResponding(id, "officer-1");
+        assertEquals("RESPONDING", responding.get("status"));
+        assertEquals("RESPONDING", store.find(CoordinationStore.RESCUE_TEAMS, "RT-002").get("status"));
+        assertStatus(HttpStatus.CONFLICT, () -> service.dispatch(id, "officer-1"));
+    }
+
     private static AssignTeamRequest assign(String teamId, String shelterId, int expected) {
         return new AssignTeamRequest(teamId, shelterId, expected, "Kolonnawa junction", "");
     }

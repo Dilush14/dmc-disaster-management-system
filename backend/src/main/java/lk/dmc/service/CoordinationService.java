@@ -390,6 +390,58 @@ public class CoordinationService {
         });
     }
 
+    /** Sends an assigned team out. Allowed from ASSIGNED, or COMM_FAILURE to retry a dispatch that did not reach the team. */
+    public Map<String, Object> dispatch(String id, String actorId) {
+        return dispatch(id, actorId, null);
+    }
+
+    public Map<String, Object> dispatch(String id, String actorId, String actorName) {
+        return advanceAssignment(id, Set.of("ASSIGNED", "COMM_FAILURE"), "DISPATCHED", "dispatchedAt",
+            actorId, actorName, "Team dispatched", "Only assigned teams can be dispatched");
+    }
+
+    /** Records that a dispatched team has started responding on the ground. */
+    public Map<String, Object> markResponding(String id, String actorId) {
+        return markResponding(id, actorId, null);
+    }
+
+    public Map<String, Object> markResponding(String id, String actorId, String actorName) {
+        return advanceAssignment(id, Set.of("DISPATCHED"), "RESPONDING", "respondingAt",
+            actorId, actorName, "Team responding", "Only dispatched teams can be marked as responding");
+    }
+
+    /** Moves an assignment and its team to the next status together, in one transaction. */
+    private Map<String, Object> advanceAssignment(String id, Set<String> allowedFrom, String next, String timestampField,
+                                                  String actorId, String actorName, String note, String conflictMessage) {
+        return store.transaction(tx -> {
+            Map<String, Object> assignment = requireRow(tx.get(TEAM_ASSIGNMENTS, id), "Team assignment");
+            String teamId = String.valueOf(assignment.get("teamId"));
+            Map<String, Object> team = tx.get(RESCUE_TEAMS, teamId);
+            String current = String.valueOf(assignment.get("status"));
+            if (!allowedFrom.contains(current))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, conflictMessage + " (this one is "
+                    + current.toLowerCase(Locale.ROOT).replace('_', ' ') + ").");
+
+            String now = now();
+            assignment = new LinkedHashMap<>(assignment);
+            List<Object> history = new ArrayList<>(assignment.get("history") instanceof List<?> list ? list : List.of());
+            history.add(historyEntry(next, now, actorId, actorName, note));
+            assignment.put("status", next);
+            assignment.put(timestampField, now);
+            assignment.put("history", history);
+            tx.set(TEAM_ASSIGNMENTS, id, assignment);
+            // The team follows the assignment only while it is still held by it.
+            if (team != null && id.equals(team.get("currentAssignmentId"))) {
+                team = new LinkedHashMap<>(team);
+                team.put("status", next);
+                team.put("updatedAt", now);
+                team.put("updatedBy", actorId);
+                tx.set(RESCUE_TEAMS, teamId, team);
+            }
+            return assignment;
+        });
+    }
+
     private static Map<String, Object> historyEntry(String status, String at, String by, String byName, String note) {
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("status", status);

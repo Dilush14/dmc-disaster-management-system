@@ -226,6 +226,15 @@ export function canCancelAssignment(assignment) {
   return assignment?.status === 'ASSIGNED';
 }
 
+/** Assigned teams can be dispatched; a dispatch that failed to reach the team can be retried. */
+export function canDispatchAssignment(assignment) {
+  return ['ASSIGNED', 'COMM_FAILURE'].includes(assignment?.status);
+}
+
+export function canMarkResponding(assignment) {
+  return assignment?.status === 'DISPATCHED';
+}
+
 export function filterAssignments(rows, { query = '', status = 'All', district = 'All' } = {}) {
   const text = query.trim().toLowerCase();
   return rows.filter(row =>

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  assignmentConflictKind, availableSpace, canCancelAssignment, canChangeAvailability, filterAssignments, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam, checkShelterCapacity, filterTeams, validateTeamForm, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate,
+  assignmentConflictKind, availableSpace, canCancelAssignment, canDispatchAssignment, canMarkResponding, canChangeAvailability, filterAssignments, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam, checkShelterCapacity, filterTeams, validateTeamForm, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate,
   validateAllocationDetails, validateOccupancy, validateResourceForm, validateResourceSelection, validateShelterForm,
 } from './resourcesShelters.js';
 
@@ -131,4 +131,14 @@ test('assignment conflicts and cancellation rules', () => {
   assert.deepEqual(filterAssignments(rows, { query: 'navy' }).map(row => row.id), ['TA-1']);
   assert.deepEqual(filterAssignments(rows, { status: 'CANCELLED' }).map(row => row.id), ['TA-2']);
   assert.deepEqual(filterAssignments(rows, { district: 'Colombo' }).map(row => row.id), ['TA-1']);
+});
+
+test('dispatch is allowed from assigned or comm failure, responding only after dispatch', () => {
+  assert.equal(canDispatchAssignment({ status: 'ASSIGNED' }), true);
+  assert.equal(canDispatchAssignment({ status: 'COMM_FAILURE' }), true);
+  assert.equal(canDispatchAssignment({ status: 'DISPATCHED' }), false);
+  assert.equal(canDispatchAssignment(null), false);
+  assert.equal(canMarkResponding({ status: 'DISPATCHED' }), true);
+  assert.equal(canMarkResponding({ status: 'ASSIGNED' }), false);
+  assert.equal(canMarkResponding({ status: 'RESPONDING' }), false);
 });
