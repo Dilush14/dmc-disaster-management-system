@@ -10,6 +10,10 @@ export const colors = {
   danger: '#dc2626',
   success: '#15803d',
   warning: '#b45309',
+  warningLight: '#fff7ed',
+  successLight: '#dcfce7',
+  dangerLight: '#fee2e2',
+  slateLight: '#f1f5f9',
 };
 
 export const spacing = { xs: 6, sm: 10, md: 16, lg: 24, xl: 32 };

@@ -140,3 +140,136 @@ export function paginate(rows, page, pageSize = 8) {
 export function countBy(rows, key) {
   return rows.reduce((counts, row) => ({ ...counts, [row[key]]: (counts[row[key]] || 0) + 1 }), {});
 }
+
+const HAZARD_LABELS = { FLOOD: 'Flood', LANDSLIDE: 'Landslide', CYCLONE: 'Cyclone', DROUGHT: 'Drought', TSUNAMI: 'Tsunami' };
+
+export function describeResponse(response) {
+  const type = String(response?.hazardType || '');
+  const hazard = HAZARD_LABELS[type] || (type ? type.charAt(0) + type.slice(1).toLowerCase().replace(/_/g, ' ') : 'Unknown hazard');
+  const list = Array.isArray(response?.affectedAreas) ? response.affectedAreas.filter(Boolean) : [];
+  const areas = list.length <= 1 ? list[0] || 'Not specified' : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`;
+  return { hazard, areas };
+}
+
+export const TEAM_AGENCIES = ['DMC', 'Sri Lanka Army', 'Navy', 'Police', 'Fire Service', 'Red Cross', 'NGO'];
+export const TEAM_CAPABILITIES = ['Boat Rescue', 'First Aid', 'Evacuation', 'Heavy Lifting'];
+export const TEAM_STATUSES = ['AVAILABLE', 'ASSIGNED', 'DISPATCHED', 'RESPONDING', 'UNAVAILABLE', 'COMM_FAILURE'];
+const ON_ASSIGNMENT = ['ASSIGNED', 'DISPATCHED', 'RESPONDING'];
+
+/** Availability is managed by dispatch while a team is on an assignment, so manual toggling is blocked (mirrors the backend 409). */
+export function canChangeAvailability(team) {
+  return !ON_ASSIGNMENT.includes(team?.status);
+}
+
+export function validateTeamForm(form) {
+  const errors = {};
+  if (!form.name?.trim()) errors.name = 'Team name is required.';
+  else if (form.name.trim().length > 120) errors.name = 'Team name must be 120 characters or fewer.';
+  if (!TEAM_AGENCIES.includes(form.agency)) errors.agency = 'Select an agency.';
+  if (!DISTRICTS.includes(form.district)) errors.district = 'Select a district.';
+  const members = Number(form.memberCount);
+  if (form.memberCount === '' || !Number.isInteger(members) || members < 1 || members > 500) errors.memberCount = 'Members must be a whole number from 1 to 500.';
+  if (!form.leader?.trim()) errors.leader = 'Team leader is required.';
+  if (!/^[0-9 +()-]{7,20}$/.test(form.contactNumber || '')) errors.contactNumber = 'Enter a valid phone number.';
+  if (!form.capabilities?.length) errors.capabilities = 'Select at least one capability.';
+  return errors;
+}
+
+export function filterTeams(teams, { query = '', district = 'All', agency = 'All', status = 'All' } = {}) {
+  const text = query.trim().toLowerCase();
+  return teams.filter(team =>
+    (!text || team.name.toLowerCase().includes(text) || team.leader.toLowerCase().includes(text) || team.id.toLowerCase().includes(text))
+    && (district === 'All' || team.district === district)
+    && (agency === 'All' || team.agency === agency)
+    && (status === 'All' || team.status === status));
+}
+
+export const ASSIGNMENT_STATUSES = ['ASSIGNED', 'DISPATCHED', 'RESPONDING', 'COMPLETED', 'CANCELLED', 'COMM_FAILURE'];
+
+/** Step 1 of the assign-team wizard: an active shelter and a whole number of evacuees (min 1). */
+export function validateAssignmentShelter(shelter, expectedEvacuees) {
+  const errors = {};
+  if (!shelter) errors.shelterId = 'Select a destination shelter.';
+  else if (shelter.status === 'Inactive') errors.shelterId = 'This shelter is inactive. Choose another shelter.';
+  const expected = Number(expectedEvacuees);
+  if (expectedEvacuees === '' || expectedEvacuees === undefined || !Number.isInteger(expected) || expected < 1) errors.expectedEvacuees = 'Expected evacuees must be a whole number of 1 or more.';
+  return errors;
+}
+
+/** Step 2: only teams currently AVAILABLE can be assigned. */
+export function validateAssignmentTeam(team) {
+  if (!team) return 'Select a rescue team.';
+  if (team.status !== 'AVAILABLE') return 'This team is not available. Choose another team.';
+  return '';
+}
+
+/** Step 3: pickup location required (max 200), notes optional (max 300). */
+export function validateAssignmentDetails(details) {
+  const errors = {};
+  const pickup = (details.pickupLocation || '').trim();
+  if (!pickup) errors.pickupLocation = 'Pickup location is required.';
+  else if (pickup.length > 200) errors.pickupLocation = 'Pickup location must be 200 characters or fewer.';
+  if ((details.notes || '').length > 300) errors.notes = 'Notes must be 300 characters or fewer.';
+  return errors;
+}
+
+/** Classifies a 409 from POST /team-assignments so the wizard can return to the right step. */
+export function assignmentConflictKind(error) {
+  if (error?.status !== 409) return null;
+  const message = String(error.message || '').toLowerCase();
+  if (message.includes('capacity')) return 'capacity';
+  if (message.includes('team')) return 'team';
+  return null;
+}
+
+export function canCancelAssignment(assignment) {
+  return assignment?.status === 'ASSIGNED';
+}
+
+/** Assigned teams can be dispatched; a dispatch that failed to reach the team can be retried. */
+export function canDispatchAssignment(assignment) {
+  return ['ASSIGNED', 'COMM_FAILURE'].includes(assignment?.status);
+}
+
+export function canMarkResponding(assignment) {
+  return assignment?.status === 'DISPATCHED';
+}
+
+export function filterAssignments(rows, { query = '', status = 'All', district = 'All' } = {}) {
+  const text = query.trim().toLowerCase();
+  return rows.filter(row =>
+    (!text || [row.id, row.teamName, row.shelterName, row.pickupLocation].some(value => String(value || '').toLowerCase().includes(text)))
+    && (status === 'All' || row.status === status)
+    && (district === 'All' || row.district === district));
+}
+
+/** Arrival can be recorded once a team is on its way (dispatched) or already on the ground (responding). */
+export function canRecordArrival(assignment) {
+  return ['DISPATCHED', 'RESPONDING'].includes(assignment?.status);
+}
+
+export function validateArrival(value) {
+  if (value === '' || value === null || value === undefined) return 'Enter the number of evacuees delivered.';
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0) return 'Evacuees delivered must be a whole number of 0 or more.';
+  return '';
+}
+
+/** Shelter occupancy before and after an arrival, e.g. 380 → 430 occupied and 120 → 70 available. */
+export function previewArrival(shelter, delivered) {
+  const capacity = Number(shelter.capacity || 0);
+  const occupied = Number(shelter.occupied || 0);
+  const after = occupied + Number(delivered || 0);
+  return {
+    before: { occupied, available: availableSpace(shelter) },
+    after: { occupied: after, available: Math.max(0, capacity - after) },
+    exceedsCapacity: after > capacity,
+    overBy: Math.max(0, after - capacity),
+  };
+}
+
+/** '1 person', '5 people'. */
+export function peopleLabel(count) {
+  const n = Number(count);
+  return `${n.toLocaleString()} ${n === 1 ? 'person' : 'people'}`;
+}

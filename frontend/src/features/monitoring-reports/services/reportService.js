@@ -1,7 +1,11 @@
 import { authenticatedRequest } from '../../../services/api/authenticatedClient';
-import { generateReport, getGeneratedReports, getReportById } from '../utils/monitoringReports.js';
 
 export const reportService = {
+  previewReport: config => authenticatedRequest('/api/staff/reports/preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  }),
   generateReport: config => authenticatedRequest('/api/staff/reports', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -9,9 +13,6 @@ export const reportService = {
   }),
   getGeneratedReports: () => authenticatedRequest('/api/staff/reports'),
   getReportById: id => authenticatedRequest(`/api/staff/reports/${encodeURIComponent(id)}`),
-  createPreview: generateReport,
-  getDemoReports: getGeneratedReports,
-  getDemoReportById: getReportById,
 };
 
 export default reportService;

@@ -4,8 +4,10 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import lk.dmc.dto.*;
+import lk.dmc.security.PublicIdentity;
 import lk.dmc.service.CoordinationService;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -14,6 +16,10 @@ public class StaffCoordinationController {
     private final CoordinationService coordination;
     public StaffCoordinationController(CoordinationService coordination) {
         this.coordination = coordination;
+    }
+    @GetMapping("/active-responses")
+    public List<Map<String, Object>> activeResponses(@RequestParam(required = false) String district) {
+        return coordination.activeResponses(district);
     }
     @GetMapping("/overview")
     public Map<String, Object> overview(@RequestParam(required = false) String district) {
@@ -69,5 +75,63 @@ public class StaffCoordinationController {
     @PatchMapping("/distributions/{id}/status")
     public Map<String, Object> updateStatus(@PathVariable String id, @Valid @RequestBody DistributionStatusRequest request) {
         return coordination.updateDistributionStatus(id, request);
+    }
+    @GetMapping("/teams")
+    public List<Map<String, Object>> teams(@RequestParam(required = false) String district, @RequestParam(required = false) String status) {
+        return coordination.listTeams(district, status);
+    }
+    @GetMapping("/teams/{id}")
+    public Map<String, Object> team(@PathVariable String id) {
+        return coordination.getTeam(id);
+    }
+    @PostMapping("/teams")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Map<String, Object> createTeam(@Valid @RequestBody TeamRequest request, @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.createTeam(request, identity.id());
+    }
+    @PutMapping("/teams/{id}")
+    public Map<String, Object> updateTeam(@PathVariable String id, @Valid @RequestBody TeamRequest request,
+                                          @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.updateTeam(id, request, identity.id());
+    }
+    @PatchMapping("/teams/{id}/availability")
+    public Map<String, Object> setAvailability(@PathVariable String id, @Valid @RequestBody TeamAvailabilityRequest request,
+                                               @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.setAvailability(id, request, identity.id());
+    }
+    @GetMapping("/team-assignments")
+    public List<Map<String, Object>> assignments(@RequestParam(required = false) String status) {
+        return coordination.listAssignments(status);
+    }
+    @GetMapping("/team-assignments/{id}")
+    public Map<String, Object> assignment(@PathVariable String id) {
+        return coordination.getAssignment(id);
+    }
+    @PostMapping("/team-assignments")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Map<String, Object> assignTeam(@Valid @RequestBody AssignTeamRequest request, @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.assignTeam(request, identity.id(), displayName(identity));
+    }
+    @PostMapping("/team-assignments/{id}/cancel")
+    public Map<String, Object> cancelAssignment(@PathVariable String id, @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.cancelAssignment(id, identity.id(), displayName(identity));
+    }
+    @PostMapping("/team-assignments/{id}/dispatch")
+    public Map<String, Object> dispatch(@PathVariable String id, @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.dispatch(id, identity.id(), displayName(identity));
+    }
+    @PostMapping("/team-assignments/{id}/responding")
+    public Map<String, Object> markResponding(@PathVariable String id, @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.markResponding(id, identity.id(), displayName(identity));
+    }
+    @PostMapping("/team-assignments/{id}/arrival")
+    public Map<String, Object> recordArrival(@PathVariable String id, @Valid @RequestBody ArrivalRequest request,
+                                             @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.recordArrival(id, request, identity.id(), displayName(identity));
+    }
+
+    private static String displayName(PublicIdentity identity) {
+        if (identity.name() != null && !identity.name().isBlank()) return identity.name();
+        return identity.email();
     }
 }

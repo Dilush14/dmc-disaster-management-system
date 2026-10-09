@@ -4,7 +4,7 @@ import { MapPin, Plus, Search } from 'lucide-react';
 import { listShelters } from '../services/resourcesSheltersService';
 import { countBy, filterShelters, paginate } from '../utils/resourcesShelters';
 import { ShelterFormDialog } from '../components/FormDialogs';
-import { Card, ErrorBanner, inputClass, Loading, OccupancyBar, PageHeader, Pagination, PrimaryButton, Select, StatusBadge, useAsync } from '../components/ui';
+import { Card, ErrorBanner, inputClass, Loading, Refreshing, OccupancyBar, PageHeader, Pagination, PrimaryButton, Select, StatusBadge, useAsync } from '../components/ui';
 
 const statusTabs = ['All', 'Active', 'Full', 'Inactive'];
 
@@ -33,6 +33,7 @@ export default function ShelterManagementPage() {
       />
       {error && <ErrorBanner message={`Shelter information is unavailable. ${error}`} onRetry={reload} />}
       {loading && !shelters && <Loading label="Loading shelters…" />}
+      {loading && shelters && <Refreshing />}
       {shelters && (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,.9fr)]">
           <Card>

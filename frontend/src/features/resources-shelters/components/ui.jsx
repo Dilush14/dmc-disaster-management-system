@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, RefreshCw, X } from 'lucide-react';
 
 const badgeTones = {
   Active: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
@@ -16,9 +16,18 @@ const badgeTones = {
   PENDING: 'bg-amber-50 text-amber-700 ring-amber-200',
   IN_TRANSIT: 'bg-blue-50 text-blue-700 ring-blue-200',
   Inactive: 'bg-slate-100 text-slate-600 ring-slate-200',
+  AVAILABLE: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  ASSIGNED: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+  DISPATCHED: 'bg-blue-50 text-blue-700 ring-blue-200',
+  RESPONDING: 'bg-violet-50 text-violet-700 ring-violet-200',
+  UNAVAILABLE: 'bg-slate-100 text-slate-600 ring-slate-200',
+  COMM_FAILURE: 'bg-rose-50 text-rose-700 ring-rose-200',
 };
 
-const statusLabels = { PENDING: 'Pending', IN_TRANSIT: 'In Transit', COMPLETED: 'Completed', CANCELLED: 'Cancelled' };
+const statusLabels = {
+    PENDING: 'Pending', IN_TRANSIT: 'In Transit', COMPLETED: 'Completed', CANCELLED: 'Cancelled',
+  AVAILABLE: 'Available', ASSIGNED: 'Assigned', DISPATCHED: 'Dispatched', RESPONDING: 'Responding', UNAVAILABLE: 'Unavailable', COMM_FAILURE: 'Comm Failure',
+};
 
 export function StatusBadge({ status }) {
   return (
@@ -46,6 +55,8 @@ const sections = [
   { to: '/staff/resources-shelters', label: 'Overview', end: true },
   { to: '/staff/resources-shelters/shelters', label: 'Shelters' },
   { to: '/staff/resources-shelters/resources', label: 'Resources' },
+  { to: '/staff/resources-shelters/teams', label: 'Rescue Teams', end: true },
+  { to: '/staff/resources-shelters/teams/assignments', label: 'Team Assignments' },
   { to: '/staff/resources-shelters/allocate', label: 'Allocate' },
   { to: '/staff/resources-shelters/distributions', label: 'Distribution History' },
   { to: '/staff/resources-shelters/alerts', label: 'Shortages & Alerts' },
@@ -78,12 +89,33 @@ export function PageHeader({ title, subtitle, action }) {
   );
 }
 
+/** Numbered wizard progress used by the allocation and team-assignment flows. */
+export function Stepper({ steps, step }) {
+  return (
+    <ol className={`mb-6 grid gap-2`} style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
+      {steps.map((label, index) => {
+        const number = index + 1;
+        const done = step > number;
+        const active = step === number;
+        return (
+          <li key={label} className="flex flex-col items-center gap-1 text-center">
+            <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${done ? 'bg-emerald-500 text-white' : active ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+              {done ? <Check size={16} /> : number}
+            </span>
+            <span className={`text-xs font-semibold ${active ? 'text-blue-700' : 'text-slate-500'}`}>{label}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 export function PrimaryButton({ children, className = '', ...props }) {
-  return <button type="button" className={`inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 ${className}`} {...props}>{children}</button>;
+  return <button type="button" className={`inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600! px-4 py-2 text-sm font-semibold text-white! hover:bg-blue-700! disabled:cursor-not-allowed disabled:opacity-50 ${className}`} {...props}>{children}</button>;
 }
 
 export function SecondaryButton({ children, className = '', ...props }) {
-  return <button type="button" className={`inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 ${className}`} {...props}>{children}</button>;
+  return <button type="button" className={`inline-flex items-center justify-center gap-2 rounded-lg border! border-slate-200! bg-white! px-4 py-2 text-sm font-semibold text-slate-700! hover:bg-slate-50! disabled:cursor-not-allowed disabled:opacity-50 ${className}`} {...props}>{children}</button>;
 }
 
 export const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100';
@@ -118,6 +150,11 @@ export function ErrorBanner({ message, onRetry }) {
 
 export function Loading({ label = 'Loading…' }) {
   return <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">{label}</div>;
+}
+
+/** Shown while existing data is being reloaded, e.g. after a save. */
+export function Refreshing({ label = 'Refreshing…' }) {
+  return <div role="status" className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700"><span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />{label}</div>;
 }
 
 export function OccupancyBar({ rate }) {

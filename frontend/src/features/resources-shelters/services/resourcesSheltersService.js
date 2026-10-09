@@ -33,6 +33,7 @@ async function request(path, { method = 'GET', body, signal } = {}) {
 
 const query = district => (district && district !== 'All' ? `?district=${encodeURIComponent(district)}` : '');
 
+export const getActiveResponses = (district, options) => request(`/active-responses${query(district)}`, options);
 export const getOverview = (district, options) => request(`/overview${query(district)}`, options);
 export const getAlerts = options => request('/alerts', options);
 export const listShelters = (district, options) => request(`/shelters${query(district)}`, options);
@@ -48,3 +49,19 @@ export const listDistributions = (district, options) => request(`/distributions$
 export const allocateResources = body => request('/distributions', { method: 'POST', body });
 export const updateDistributionStatus = (id, status) =>
   request(`/distributions/${encodeURIComponent(id)}/status`, { method: 'PATCH', body: { status } });
+
+export const listTeams = options => request('/teams', options);
+export const getTeam = (id, options) => request(`/teams/${encodeURIComponent(id)}`, options);
+export const createTeam = body => request('/teams', { method: 'POST', body });
+export const updateTeam = (id, body) => request(`/teams/${encodeURIComponent(id)}`, { method: 'PUT', body });
+export const setTeamAvailability = (id, status) =>
+  request(`/teams/${encodeURIComponent(id)}/availability`, { method: 'PATCH', body: { status } });
+
+export const listTeamAssignments = options => request('/team-assignments', options);
+export const getTeamAssignment = (id, options) => request(`/team-assignments/${encodeURIComponent(id)}`, options);
+export const assignTeam = body => request('/team-assignments', { method: 'POST', body });
+export const cancelTeamAssignment = id => request(`/team-assignments/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+export const dispatchTeamAssignment = id => request(`/team-assignments/${encodeURIComponent(id)}/dispatch`, { method: 'POST' });
+export const markAssignmentResponding = id => request(`/team-assignments/${encodeURIComponent(id)}/responding`, { method: 'POST' });
+export const recordTeamArrival = (id, { evacueesDelivered, expectedOccupancy }) =>
+  request(`/team-assignments/${encodeURIComponent(id)}/arrival`, { method: 'POST', body: { evacueesDelivered, expectedOccupancy } });
