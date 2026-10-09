@@ -48,6 +48,17 @@ class HazardReportServiceTests {
         assertFalse(report.containsKey("requestFingerprint"));
     }
     @Test
+    void derivesDistrictFromGpsSoReportsReachDistrictViews() {
+        var report = service.submit(request("Road flooded"), null, identity);
+        assertEquals("Colombo", report.get("district"));
+    }
+    @Test
+    void staffListBackfillsDistrictForLegacyReports() {
+        when(repository.findAll()).thenReturn(java.util.List.of(
+            Map.of("reportId", "HR-OLD", "latitude", 7.2906, "longitude", 80.6337, "submittedAt", "2026-01-01T00:00:00Z")));
+        assertEquals("Kandy", service.staffList().get(0).get("district"));
+    }
+    @Test
     void retryReturnsSameReportAndChangedPayloadConflicts() {
         var first = service.submit(request("Road flooded"), null, identity);
         var second = service.submit(request("Road flooded"), null, identity);

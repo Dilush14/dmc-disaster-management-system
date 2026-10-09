@@ -56,6 +56,7 @@ public class HazardReportService {
             .doubleValue());
         data.put("longitude", request.longitude()
             .doubleValue());
+        data.put("district", DistrictLocator.locate(request.latitude(), request.longitude()));
         data.put("dateTime", request.dateTime()
             .toInstant()
             .toString());
@@ -90,12 +91,22 @@ public class HazardReportService {
             .sorted(Comparator.comparing(
                 (Map<String, Object> report) -> String.valueOf(report.getOrDefault("submittedAt", "")))
                 .reversed())
+            .map(this::withDistrict)
             .toList();
     }
     public Map<String, Object> staffGet(String id) {
         var report = reports.find(id);
         if (report == null) throw missing();
-        return publicView(report);
+        return publicView(withDistrict(report));
+    }
+    // Reports saved before districts were recorded only carry GPS; derive one so district filters still match them.
+    private Map<String, Object> withDistrict(Map<String, Object> report) {
+        if (report.get("district") != null) return report;
+        String district = DistrictLocator.locate(report.get("latitude"), report.get("longitude"));
+        if (district == null) return report;
+        var result = new LinkedHashMap<>(report);
+        result.put("district", district);
+        return result;
     }
     public Map<String, Object> verify(String id, PublicIdentity identity) {
         return moderate(id, "VERIFIED", null, identity);
