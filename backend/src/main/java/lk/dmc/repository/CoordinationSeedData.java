@@ -37,8 +37,24 @@ public final class CoordinationSeedData {
             distribution(tx, "RD-003", "RS-004", "Blankets", "Piece", 300, "SH-004", "Kandy Sports Complex", "Kandy", "2026-09-13", "COMPLETED");
             distribution(tx, "RD-004", "RS-003", "Medical Kits", "Kit", 100, "SH-005", "Matara Public Hall", "Matara", "2026-09-13", "COMPLETED");
             distribution(tx, "RD-005", "RS-005", "Hygiene Kits", "Kit", 200, "SH-006", "Galle Municipal Hall", "Galle", "2026-09-12", "CANCELLED");
+
+            emergencyResponse(tx, "ER-001", "FLOOD", "Colombo", "Colombo Flood Response", "ACTIVE", "2026-09-14T06:00:00Z",
+                List.of("Kelani River Basin", "Kolonnawa"));
             return null;
         });
+    }
+
+    private static void emergencyResponse(CoordinationStore.Tx tx, String id, String hazardType, String district, String title,
+        String status, String startedAt, List<String> affectedAreas) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", id);
+        row.put("hazardType", hazardType);
+        row.put("district", district);
+        row.put("title", title);
+        row.put("status", status);
+        row.put("startedAt", startedAt);
+        row.put("affectedAreas", affectedAreas);
+        tx.set(CoordinationStore.EMERGENCY_RESPONSES, id, row);
     }
 
     private static void shelter(CoordinationStore.Tx tx, String id, String name, String district, String address, String type,

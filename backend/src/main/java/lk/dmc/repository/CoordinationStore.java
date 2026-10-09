@@ -10,6 +10,7 @@ public interface CoordinationStore {
     String RESOURCES = "reliefResources";
     String DISTRIBUTIONS = "resourceDistributions";
     String OCCUPANCY_HISTORY = "shelterOccupancyHistory";
+    String EMERGENCY_RESPONSES = "emergencyResponses";
 
     List<Map<String, Object>> list(String collection);
     Map<String, Object> find(String collection, String id);

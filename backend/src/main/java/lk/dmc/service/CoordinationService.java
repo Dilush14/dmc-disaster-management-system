@@ -28,6 +28,17 @@ public class CoordinationService {
         this.clock = clock;
     }
 
+    // ---- Emergency responses ----
+
+    /** Active emergency responses (newest first), optionally limited to one district. */
+    public List<Map<String, Object>> activeResponses(String district) {
+        return store.list(EMERGENCY_RESPONSES).stream()
+            .filter(row -> "ACTIVE".equals(row.get("status")))
+            .filter(row -> matchesDistrict(row, district))
+            .sorted(Comparator.comparing((Map<String, Object> row) -> String.valueOf(row.get("startedAt"))).reversed())
+            .toList();
+    }
+
     // ---- Shelters ----
 
     public List<Map<String, Object>> shelters(String district) {

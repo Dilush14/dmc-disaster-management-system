@@ -3,6 +3,7 @@ import { Boxes, Droplets, HeartPulse, House, HousePlus, Package, ShowerHead, Use
 import MonitoringStatCard from '../../monitoring-reports/components/MonitoringStatCard';
 import { getOverview } from '../services/resourcesSheltersService';
 import { occupancyBand } from '../utils/resourcesShelters';
+import ActiveResponseBanner from '../components/ActiveResponseBanner';
 import { Card, ErrorBanner, formatDateTime, Loading, PageHeader, StatusBadge, useAsync } from '../components/ui';
 
 const bandStyles = {
@@ -20,6 +21,7 @@ export default function ResourcesSheltersDashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Resources & Shelters Overview" subtitle="Live shelter capacity, occupancy and relief stock across districts." />
+      <ActiveResponseBanner />
       {error && <ErrorBanner message={`Shelter information is unavailable. ${error}`} onRetry={reload} />}
       {loading && !data && <Loading label="Loading shelter information…" />}
       {data && (

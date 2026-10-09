@@ -140,3 +140,13 @@ export function paginate(rows, page, pageSize = 8) {
 export function countBy(rows, key) {
   return rows.reduce((counts, row) => ({ ...counts, [row[key]]: (counts[row[key]] || 0) + 1 }), {});
 }
+
+const HAZARD_LABELS = { FLOOD: 'Flood', LANDSLIDE: 'Landslide', CYCLONE: 'Cyclone', DROUGHT: 'Drought', TSUNAMI: 'Tsunami' };
+
+export function describeResponse(response) {
+  const type = String(response?.hazardType || '');
+  const hazard = HAZARD_LABELS[type] || (type ? type.charAt(0) + type.slice(1).toLowerCase().replace(/_/g, ' ') : 'Unknown hazard');
+  const list = Array.isArray(response?.affectedAreas) ? response.affectedAreas.filter(Boolean) : [];
+  const areas = list.length <= 1 ? list[0] || 'Not specified' : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`;
+  return { hazard, areas };
+}

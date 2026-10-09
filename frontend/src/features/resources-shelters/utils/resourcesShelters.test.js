@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  availableSpace, checkShelterCapacity, checkStock, filterShelters, occupancyBand, occupancyRate, paginate,
+  availableSpace, checkShelterCapacity, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate,
   validateAllocationDetails, validateOccupancy, validateResourceForm, validateResourceSelection, validateShelterForm,
 } from './resourcesShelters.js';
 
@@ -64,4 +64,10 @@ test('filtering and pagination', () => {
   assert.deepEqual(page.rows, [16, 17, 18, 19]);
   assert.equal(page.pages, 3);
   assert.equal(paginate([], 4).page, 1);
+});
+
+test('active response banner text', () => {
+  assert.deepEqual(describeResponse({ hazardType: 'FLOOD', affectedAreas: ['Kelani River Basin', 'Kolonnawa'] }),
+    { hazard: 'Flood', areas: 'Kelani River Basin and Kolonnawa' });
+  assert.deepEqual(describeResponse({ hazardType: 'HIGH_WIND', affectedAreas: [] }), { hazard: 'High wind', areas: 'Not specified' });
 });

@@ -15,6 +15,10 @@ public class StaffCoordinationController {
     public StaffCoordinationController(CoordinationService coordination) {
         this.coordination = coordination;
     }
+    @GetMapping("/active-responses")
+    public List<Map<String, Object>> activeResponses(@RequestParam(required = false) String district) {
+        return coordination.activeResponses(district);
+    }
     @GetMapping("/overview")
     public Map<String, Object> overview(@RequestParam(required = false) String district) {
         return coordination.overview(district);

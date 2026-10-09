@@ -33,6 +33,7 @@ async function request(path, { method = 'GET', body, signal } = {}) {
 
 const query = district => (district && district !== 'All' ? `?district=${encodeURIComponent(district)}` : '');
 
+export const getActiveResponses = (district, options) => request(`/active-responses${query(district)}`, options);
 export const getOverview = (district, options) => request(`/overview${query(district)}`, options);
 export const getAlerts = options => request('/alerts', options);
 export const listShelters = (district, options) => request(`/shelters${query(district)}`, options);

@@ -6,6 +6,7 @@ import {
   checkShelterCapacity, checkStock, filterShelters, TRANSPORT_METHODS, validateAllocationDetails, validateResourceSelection,
 } from '../utils/resourcesShelters';
 import { CapacityWarningDialog, StockWarningDialog } from '../components/WarningDialogs';
+import ActiveResponseBanner from '../components/ActiveResponseBanner';
 import { Card, ErrorBanner, Field, formatDate, inputClass, Loading, PageHeader, PrimaryButton, SecondaryButton, Select, StatusBadge, useAsync } from '../components/ui';
 
 const steps = ['Select Resources', 'Select Destination', 'Allocation Details', 'Review'];
@@ -125,6 +126,7 @@ export default function AllocateResourcesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Allocate Resources" subtitle="Send relief supplies from stock to a shelter." />
+      <ActiveResponseBanner />
       <Card>
         <Stepper step={step} />
         {step === 1 && <ResourceStep resources={resources.data} selection={selection} setSelection={setSelection} error={errors.selection} />}

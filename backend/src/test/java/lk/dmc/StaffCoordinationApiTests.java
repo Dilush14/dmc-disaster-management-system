@@ -76,6 +76,30 @@ class StaffCoordinationApiTests {
         }
 
         @Test
+        void activeResponsesAreListedForDistrict() throws Exception {
+            mvc.perform(get("/api/staff/resources-shelters/active-responses").param("district", "Colombo")
+                    .header("Authorization", "Bearer officer-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].title").value("Colombo Flood Response"))
+                .andExpect(jsonPath("$[0].hazardType").value("FLOOD"));
+        }
+
+        @Test
+        void activeResponsesAreListedWithoutDistrict() throws Exception {
+            mvc.perform(get("/api/staff/resources-shelters/active-responses").header("Authorization", "Bearer officer-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == 'ER-001')].status").value("ACTIVE"));
+        }
+
+        @Test
+        void activeResponsesAreFilteredByDistrict() throws Exception {
+            mvc.perform(get("/api/staff/resources-shelters/active-responses").param("district", "Kandy")
+                    .header("Authorization", "Bearer officer-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+        }
+
+        @Test
         void invalidOccupancyIsRejected() throws Exception {
             mvc.perform(patch("/api/staff/resources-shelters/shelters/SH-009/occupancy").header("Authorization", "Bearer officer-token")
                     .contentType(MediaType.APPLICATION_JSON).content("{\"occupied\":-1,\"expectedOccupancy\":380}"))

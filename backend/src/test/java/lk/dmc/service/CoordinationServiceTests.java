@@ -97,6 +97,22 @@ class CoordinationServiceTests {
     }
 
     @Test
+    void activeResponsesAreFilteredByDistrictAndStatus() {
+        var colombo = service.activeResponses("Colombo");
+        assertEquals(1, colombo.size());
+        assertEquals("Colombo Flood Response", colombo.get(0).get("title"));
+        assertEquals(List.of("Kelani River Basin", "Kolonnawa"), colombo.get(0).get("affectedAreas"));
+        assertTrue(service.activeResponses("Kandy").isEmpty());
+        store.transaction(tx -> {
+            var row = tx.get(CoordinationStore.EMERGENCY_RESPONSES, "ER-001");
+            row.put("status", "CLOSED");
+            tx.set(CoordinationStore.EMERGENCY_RESPONSES, "ER-001", row);
+            return null;
+        });
+        assertTrue(service.activeResponses(null).isEmpty());
+    }
+
+    @Test
     void unknownShelterIsNotFound() {
         assertStatus(HttpStatus.NOT_FOUND, () -> service.shelter("SH-NOPE"));
     }
