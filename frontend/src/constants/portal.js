@@ -5,4 +5,8 @@ export const features = [
   { name: 'Shelter Information', icon: House },
   { name: 'Response Coordination', icon: ChartNoAxesColumnIncreasing },
 ];
-export const roles = ['Citizen', 'Community Disaster Volunteer', 'DMC Officer', 'District Officer', 'Response Team Member'];
+export const roles = [
+  'DMC Officer',
+  'District Officer',
+  'Response Team Member'
+];

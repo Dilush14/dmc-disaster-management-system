@@ -1,0 +1,77 @@
+import { baseUrl } from '../../../services/api/client';
+import { getFirebaseServices } from '../../../services/firebase/config';
+
+const root = '/api/staff/resources-shelters';
+
+// Staff sign-in is not built yet; a token is sent when a Firebase user exists so role claims work once it is.
+async function request(path, { method = 'GET', body, signal } = {}) {
+  const headers = {};
+  const user = getFirebaseServices()?.auth.currentUser;
+  if (user) headers.Authorization = `Bearer ${await user.getIdToken()}`;
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  let response;
+  try {
+    response = await fetch(`${baseUrl}${root}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: signal || AbortSignal.timeout(30000),
+    });
+  } catch (error) {
+    if (error.name === 'AbortError') throw error;
+    throw new Error('Unable to reach the server. Check your connection and try again.');
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || `Unable to complete the request (${response.status}). Please try again.`);
+    error.status = response.status;
+    error.fields = data.errors;
+    throw error;
+  }
+  return data;
+}
+
+const query = district => (district && district !== 'All' ? `?district=${encodeURIComponent(district)}` : '');
+
+export const getActiveResponses = (district, options) => request(`/active-responses${query(district)}`, options);
+export const startResponse = body => request('/active-responses', { method: 'POST', body });
+export const closeResponse = id => request(`/active-responses/${encodeURIComponent(id)}/close`, { method: 'POST' });
+export const getOverview = (district, options) => request(`/overview${query(district)}`, options);
+export const getAlerts = options => request('/alerts', options);
+export const listShelters = (district, options) => request(`/shelters${query(district)}`, options);
+export const getShelter = (id, options) => request(`/shelters/${encodeURIComponent(id)}`, options);
+export const createShelter = body => request('/shelters', { method: 'POST', body });
+export const updateShelter = (id, body) => request(`/shelters/${encodeURIComponent(id)}`, { method: 'PUT', body });
+export const updateOccupancy = (id, occupied, expectedOccupancy) =>
+  request(`/shelters/${encodeURIComponent(id)}/occupancy`, { method: 'PATCH', body: { occupied, expectedOccupancy } });
+export const listResources = options => request('/resources', options);
+export const createResource = body => request('/resources', { method: 'POST', body });
+export const updateResource = (id, body) => request(`/resources/${encodeURIComponent(id)}`, { method: 'PUT', body });
+export const listDistributions = (district, options) => request(`/distributions${query(district)}`, options);
+export const allocateResources = body => request('/distributions', { method: 'POST', body });
+export const updateDistributionStatus = (id, status) =>
+  request(`/distributions/${encodeURIComponent(id)}/status`, { method: 'PATCH', body: { status } });
+
+export const listTeams = options => request('/teams', options);
+export const getTeam = (id, options) => request(`/teams/${encodeURIComponent(id)}`, options);
+export const createTeam = body => request('/teams', { method: 'POST', body });
+export const updateTeam = (id, body) => request(`/teams/${encodeURIComponent(id)}`, { method: 'PUT', body });
+export const setTeamAvailability = (id, status) =>
+  request(`/teams/${encodeURIComponent(id)}/availability`, { method: 'PATCH', body: { status } });
+
+export const listTeamAssignments = options => request('/team-assignments', options);
+export const getTeamAssignment = (id, options) => request(`/team-assignments/${encodeURIComponent(id)}`, options);
+export const assignTeam = body => request('/team-assignments', { method: 'POST', body });
+export const addAssignmentSupport = (id, { supportTeamIds, supportResources }) =>
+  request(`/team-assignments/${encodeURIComponent(id)}/support`, { method: 'POST', body: { supportTeamIds, supportResources } });
+export const cancelTeamAssignment = id => request(`/team-assignments/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+export const dispatchTeamAssignment = id => request(`/team-assignments/${encodeURIComponent(id)}/dispatch`, { method: 'POST' });
+export const markAssignmentResponding = id => request(`/team-assignments/${encodeURIComponent(id)}/responding`, { method: 'POST' });
+export const recordTeamArrival = (id, { evacueesDelivered, expectedOccupancy }) =>
+  request(`/team-assignments/${encodeURIComponent(id)}/arrival`, { method: 'POST', body: { evacueesDelivered, expectedOccupancy } });
+export const reportCommFailure = id => request(`/team-assignments/${encodeURIComponent(id)}/comm-failure`, { method: 'POST' });
+export const escalateCommFailure = (id, note) =>
+  request(`/team-assignments/${encodeURIComponent(id)}/escalate`, { method: 'POST', body: { note } });
+export const redispatchTeamAssignment = id => request(`/team-assignments/${encodeURIComponent(id)}/redispatch`, { method: 'POST' });
+export const reassignTeamAssignment = (id, teamId) =>
+  request(`/team-assignments/${encodeURIComponent(id)}/reassign`, { method: 'POST', body: { teamId } });
