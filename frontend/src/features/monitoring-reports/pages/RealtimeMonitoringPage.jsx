@@ -1,16 +1,85 @@
+import { useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import DataSourceNotice from '../components/DataSourceNotice';
 import MonitoringLegend from '../components/MonitoringLegend';
 import useMonitoringData from '../hooks/useMonitoringData';
 import { monitoringService } from '../services/monitoringService';
 
 const layerOptions = ['Hazard Warnings', 'Hazard Reports', 'Shelters', 'Deployed Teams', 'Road Status', 'Weather Radar', 'River Levels', 'District Boundaries'];
+const districtCoordinates = {
+  Colombo: [6.9271, 79.8612],
+  Kandy: [7.2906, 80.6337],
+  Gampaha: [7.0873, 79.9997],
+  Matara: [5.9485, 80.5353],
+  Kurunegala: [7.4863, 80.3623],
+  Jaffna: [9.6613, 80.0255],
+};
+
+const markerColor = (type, severity) => {
+  if (type === 'Warning') return '#ef4444';
+  if (type === 'Report') return '#f59e0b';
+  if (type === 'Shelter') return '#10b981';
+  if (severity === 'High') return '#ef4444';
+  if (severity === 'Moderate') return '#f59e0b';
+  return '#2563eb';
+};
 
 export default function RealtimeMonitoringPage() {
   const { district = 'Colombo' } = useParams();
+  const mapRef = useRef(null);
   const { data, loading, error, source, notice } = useMonitoringData(
     () => monitoringService.getRealtimeMonitoringData(district), district,
   );
+
+  useEffect(() => {
+    if (!data || !mapRef.current) return undefined;
+
+    const map = L.map(mapRef.current, {
+      zoomControl: true,
+      scrollWheelZoom: true,
+      attributionControl: true,
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    const activeItems = data.activeItems || [];
+    const validItems = activeItems.filter(item => Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
+
+    if (validItems.length > 0) {
+      const bounds = validItems.map(item => [item.latitude, item.longitude]);
+      map.fitBounds(bounds, { padding: [32, 32] });
+      validItems.forEach(item => {
+        const marker = L.circleMarker([item.latitude, item.longitude], {
+          radius: item.severity === 'High' ? 10 : 8,
+          color: '#ffffff',
+          weight: 2,
+          fillColor: markerColor(item.type, item.severity),
+          fillOpacity: 0.95,
+        }).addTo(map);
+
+        marker.bindPopup(`
+          <div style="min-width: 180px; font-family: sans-serif;">
+            <strong>${item.label}</strong><br />
+            <span>${item.location}</span><br />
+            <span>${item.type} · ${item.severity}</span><br />
+            <small>${item.time}</small>
+          </div>
+        `);
+      });
+    } else {
+      const center = districtCoordinates[district] || districtCoordinates.Colombo;
+      map.setView(center, 10);
+    }
+
+    map.invalidateSize();
+
+    return () => map.remove();
+  }, [data, district]);
 
   if (loading || error || !data) {
     return <div className="space-y-5"><h1 className="text-3xl font-black text-slate-900">Real-Time Monitoring</h1><DataSourceNotice loading={loading} error={error} /></div>;
@@ -34,16 +103,7 @@ export default function RealtimeMonitoringPage() {
               </label>
             ))}
           </div>
-          <div className="relative h-[520px] overflow-hidden rounded-xl border border-slate-200 bg-[radial-gradient(circle_at_top,_#dbeafe_0%,_#dfe7f5_25%,_#c9d8ee_55%,_#edf4ff_100%)]">
-            <div className="absolute left-10 top-10 h-44 w-40 rotate-12 rounded-[55%] border border-slate-300 bg-slate-200/30" />
-            <div className="absolute right-12 top-20 h-28 w-32 rotate-[-20deg] rounded-[60%] border border-slate-300 bg-slate-200/30" />
-            <div className="absolute bottom-12 left-32 h-20 w-24 rotate-12 rounded-[50%] border border-slate-300 bg-slate-200/30" />
-            {(data.activeItems || []).map((item, index) => (
-              <div key={item.id} className="absolute" style={{ left: `${18 + index * 18}%`, top: `${20 + index * 16}%` }}>
-                <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 border-white ${item.type === 'Warning' ? 'bg-red-500' : item.type === 'Report' ? 'bg-amber-400' : item.type === 'Shelter' ? 'bg-emerald-500' : 'bg-blue-600'}`} />
-              </div>
-            ))}
-          </div>
+          <div ref={mapRef} className="h-[520px] overflow-hidden rounded-xl border border-slate-200" />
           <MonitoringLegend />
         </div>
 

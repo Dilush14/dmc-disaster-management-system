@@ -29,12 +29,13 @@ test('district response includes district details and key metrics', () => {
   assert.ok(response.statistics);
 });
 
-test('realtime monitoring exposes map layers and active items', () => {
+test('realtime monitoring exposes map layers and active items with coordinates', () => {
   const data = getRealtimeMonitoringData('Colombo');
 
   assert.equal(data.district, 'Colombo');
   assert.ok(Array.isArray(data.layers));
   assert.ok(Array.isArray(data.activeItems));
+  assert.ok(data.activeItems.every(item => Number.isFinite(item.latitude) && Number.isFinite(item.longitude)));
 });
 
 test('shelter monitoring includes occupancy and status overview', () => {
