@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  canReportCommFailure, hasCommFailure, reassignTeamOptions, validateEscalationNote, assignmentConflictKind, canAddSupport, supportResourcePayload, supportTeamOptions, toggleSupportTeam, validateSupportRequest, validateSupportResources, availableSpace, canCancelAssignment, canRecordArrival, previewArrival, validateArrival, canDispatchAssignment, canMarkResponding, canChangeAvailability, filterAssignments, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam, checkShelterCapacity, filterTeams, validateTeamForm, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate, peopleLabel,
+  countBy, filterDistributions, filterResources, canReportCommFailure, hasCommFailure, reassignTeamOptions, validateEscalationNote, assignmentConflictKind, canAddSupport, supportResourcePayload, supportTeamOptions, toggleSupportTeam, validateSupportRequest, validateSupportResources, availableSpace, canCancelAssignment, canRecordArrival, previewArrival, validateArrival, canDispatchAssignment, canMarkResponding, canChangeAvailability, filterAssignments, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam, checkShelterCapacity, filterTeams, validateTeamForm, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate, peopleLabel,
   validateAllocationDetails, validateOccupancy, validateResourceForm, validateResourceSelection, validateShelterForm,
 } from './resourcesShelters.js';
 
@@ -225,4 +225,57 @@ test('escalation needs a note of at most 500 characters', () => {
   assert.notEqual(validateEscalationNote('  '), '');
   assert.notEqual(validateEscalationNote('x'.repeat(501)), '');
   assert.equal(validateEscalationNote('No radio contact'), '');
+});
+
+test('allocation equal to stock is allowed, one more is flagged', () => {
+  const resources = [{ id: 'RS-W', name: 'Water', available: 500 }];
+  assert.equal(checkStock({ 'RS-W': 500 }, resources), null);
+  assert.deepEqual(checkStock({ 'RS-W': 501 }, resources), { resourceId: 'RS-W', resource: 'Water', requested: 501, available: 500, shortage: 1 });
+  assert.equal(checkStock({ 'RS-UNKNOWN': 10 }, resources), null);
+  assert.match(validateResourceSelection({ 'RS-W': -5 }), /greater than zero/);
+  assert.match(validateResourceSelection({ 'RS-W': '2.5' }), /whole numbers/);
+});
+
+test('occupancy exactly at capacity is accepted and shows no space left', () => {
+  const shelter = { name: 'Shelter A', capacity: 500, occupied: 500, active: true };
+  assert.equal(validateOccupancy('500', shelter), '');
+  assert.equal(availableSpace(shelter), 0);
+  assert.equal(occupancyRate(500, 500), 100);
+  assert.equal(occupancyBand(100), 'critical');
+  assert.equal(checkShelterCapacity(shelter, 1).shortfall, 1);
+});
+
+test('resource list filters by name, category and stock status', () => {
+  const resources = [
+    { name: 'Water Bottles', category: 'Food & Water', status: 'Available' },
+    { name: 'Medical Kits', category: 'Medical Supplies', status: 'Low Stock' },
+    { name: 'Generators', category: 'Equipment', status: 'Out of Stock' },
+  ];
+  assert.deepEqual(filterResources(resources, { query: 'water' }).map(row => row.name), ['Water Bottles']);
+  assert.deepEqual(filterResources(resources, { category: 'Equipment' }).map(row => row.name), ['Generators']);
+  assert.deepEqual(filterResources(resources, { status: 'Low Stock' }).map(row => row.name), ['Medical Kits']);
+  assert.equal(filterResources(resources).length, 3);
+  assert.deepEqual(filterResources([], { query: 'x' }), []);
+});
+
+test('distribution history filters by resource, district and date range', () => {
+  const rows = [
+    { shelterName: 'Colombo Community Centre', district: 'Colombo', distributionDate: '2026-10-01', items: [{ name: 'Water' }] },
+    { shelterName: 'Gampaha Town Hall', district: 'Gampaha', distributionDate: '2026-10-05', items: [{ name: 'Blankets' }, { name: 'Water' }] },
+    { shelterName: 'Kalutara Vidyalaya', district: 'Kalutara', distributionDate: '2026-10-09', items: [{ name: 'Medical Kits' }] },
+  ];
+  assert.equal(filterDistributions(rows, { resource: 'Water' }).length, 2);
+  assert.deepEqual(filterDistributions(rows, { district: 'Colombo' }).map(row => row.district), ['Colombo']);
+  assert.deepEqual(filterDistributions(rows, { from: '2026-10-02', to: '2026-10-08' }).map(row => row.district), ['Gampaha']);
+  assert.deepEqual(filterDistributions(rows, { query: 'medical' }).map(row => row.district), ['Kalutara']);
+  assert.deepEqual(filterDistributions(rows, { district: 'Mannar' }), []);
+});
+
+test('counts rows per status and validates allocation extras', () => {
+  assert.deepEqual(countBy([{ status: 'Full' }, { status: 'Active' }, { status: 'Full' }], 'status'), { Full: 2, Active: 1 });
+  assert.deepEqual(countBy([], 'status'), {});
+  const errors = validateAllocationDetails({ distributionDate: '', transportMethod: 'Boat', notes: 'x'.repeat(301), expectedPeople: '-2' }, '2026-10-09');
+  assert.deepEqual(Object.keys(errors).sort(), ['distributionDate', 'expectedPeople', 'notes']);
+  assert.deepEqual(validateResourceForm({ name: 'Water', category: 'Food & Water', unit: 'Litre', totalQuantity: '1000', available: '1000', lowStockThreshold: '100' }), {});
+  assert.ok(validateResourceForm({ name: 'Water', category: 'Food & Water', unit: 'Litre', totalQuantity: '', available: '0', lowStockThreshold: '0' }).totalQuantity);
 });
