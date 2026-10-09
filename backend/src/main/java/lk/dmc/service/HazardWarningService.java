@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.Year;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import lk.dmc.dto.HazardWarningRequest;
 import lk.dmc.dto.HazardWarningUpdateRequest;
@@ -14,13 +15,18 @@ import org.springframework.stereotype.Service;
 @Service
 public class HazardWarningService {
     private final HazardWarningRepository warnings;
+    private final NotificationService notifications;
 
-    public HazardWarningService(HazardWarningRepository warnings) {
+    public HazardWarningService(HazardWarningRepository warnings, NotificationService notifications) {
         this.warnings = warnings;
+        this.notifications = notifications;
     }
 
     public Map<String, Object> list(String search, String status, String type, String severity, int page, int size) {
-        var all = warnings.findAll().stream()
+        var allWarnings = warnings.findAll().stream()
+            .map(this::withCurrentStatus)
+            .toList();
+        var all = allWarnings.stream()
             .filter(item -> matches(item, search, status, type, severity))
             .toList();
         int safeSize = Math.max(1, Math.min(size, 100));
@@ -33,6 +39,9 @@ public class HazardWarningService {
         result.put("page", safePage);
         result.put("size", safeSize);
         result.put("totalPages", (int) Math.ceil((double) all.size() / safeSize));
+        result.put("activeCount", allWarnings.stream().filter(item -> "Active".equals(item.get("status"))).count());
+        result.put("scheduledCount", allWarnings.stream().filter(item -> "Scheduled".equals(item.get("status"))).count());
+        result.put("expiredCount", allWarnings.stream().filter(item -> "Expired".equals(item.get("status"))).count());
         return result;
     }
 
@@ -52,7 +61,22 @@ public class HazardWarningService {
     }
 
     public Map<String, Object> get(String id) {
-        return warnings.find(id);
+        return withCurrentStatus(warnings.find(id));
+    }
+
+    public Map<String, Object> publicList() {
+        var items = warnings.findAll().stream()
+            .map(this::withCurrentStatus)
+            .filter(item -> Set.of("Active", "Scheduled").contains(item.get("status")))
+            .filter(item -> channelsContain(item, "WEBSITE"))
+            .toList();
+        return Map.of("items", items);
+    }
+
+    private boolean channelsContain(Map<String, Object> item, String channel) {
+        Object value = item.get("channels");
+        return value instanceof java.util.List<?> channels
+            && channels.stream().anyMatch(entry -> channel.equalsIgnoreCase(String.valueOf(entry)));
     }
 
     public Map<String, Object> create(HazardWarningRequest request, PublicIdentity identity) {
@@ -67,13 +91,46 @@ public class HazardWarningService {
         data.put("validFrom", request.validFrom().toString());
         data.put("validUntil", request.validUntil().toString());
         data.put("channels", request.channels());
-        data.put("status", "Active");
+        data.put("status", scheduledStatus(request.validFrom(), request.validUntil()));
         data.put("createdAt", now.toString());
         data.put("issuedOn", now.toString());
         data.put("createdBy", identity.id());
         data.put("recipients", 0);
         data.put("auditTrail", java.util.List.of(audit("Warning created", identity, now)));
-        return warnings.create(id, data);
+        var created = warnings.create(id, data);
+        try {
+            notifications.publishWarning(created);
+        } catch (RuntimeException error) {
+            System.err.println("Warning published, but notification fan-out failed: " + error.getMessage());
+        }
+        return created;
+    }
+
+    private String scheduledStatus(Instant validFrom, Instant validUntil) {
+        Instant now = Instant.now();
+        if (now.isBefore(validFrom)) return "Scheduled";
+        if (now.isAfter(validUntil)) return "Expired";
+        return "Active";
+    }
+
+    private Map<String, Object> withCurrentStatus(Map<String, Object> item) {
+        var result = new LinkedHashMap<>(item);
+        String status = String.valueOf(result.getOrDefault("status", ""));
+        if (Set.of("Active", "Scheduled", "Expired").contains(status)) {
+            Instant validFrom = parseInstant(result.get("validFrom"));
+            Instant validUntil = parseInstant(result.get("validUntil"));
+            if (validFrom != null && validUntil != null) result.put("status", scheduledStatus(validFrom, validUntil));
+        }
+        return result;
+    }
+
+    private Instant parseInstant(Object value) {
+        if (value == null) return null;
+        try {
+            return Instant.parse(String.valueOf(value));
+        } catch (RuntimeException error) {
+            return null;
+        }
     }
 
     public Map<String, Object> updateStatus(String id, String status, PublicIdentity identity) {
@@ -112,6 +169,9 @@ public class HazardWarningService {
     }
 
     private Map<String, Object> audit(String action, PublicIdentity identity, Instant at) {
-        return Map.of("action", action, "at", at.toString(), "actor", identity.email());
+        String actor = identity.email() == null || identity.email().isBlank()
+            ? identity.id()
+            : identity.email();
+        return Map.of("action", action, "at", at.toString(), "actor", actor);
     }
 }

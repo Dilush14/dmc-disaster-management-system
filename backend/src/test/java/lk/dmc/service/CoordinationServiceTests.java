@@ -6,6 +6,7 @@ import java.util.Map;
 import lk.dmc.dto.*;
 import lk.dmc.repository.CoordinationStore;
 import lk.dmc.repository.InMemoryCoordinationStore;
+import lk.dmc.support.RescueOperationFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -19,7 +20,18 @@ class CoordinationServiceTests {
     @BeforeEach
     void setUp() {
         store = new InMemoryCoordinationStore();
+        seedOperationalFixtures();
+        RescueOperationFixtures.seed(store);
         service = new CoordinationService(store);
+    }
+
+    @Test
+    void freshInMemoryStoreDoesNotContainDemoRecords() {
+        var freshStore = new InMemoryCoordinationStore();
+
+        assertTrue(freshStore.list(CoordinationStore.SHELTERS).isEmpty());
+        assertTrue(freshStore.list(CoordinationStore.RESOURCES).isEmpty());
+        assertTrue(freshStore.list(CoordinationStore.DISTRIBUTIONS).isEmpty());
     }
 
     @Test
@@ -166,7 +178,7 @@ class CoordinationServiceTests {
         String id = String.valueOf(assignment.get("id"));
         assertTrue(id.startsWith("TA-"));
         assertEquals("ASSIGNED", assignment.get("status"));
-        assertEquals("Kolonnawa Community Centre", assignment.get("shelterName"));
+        assertEquals("Colombo Community Centre", assignment.get("shelterName"));
         assertEquals("officer-1", assignment.get("assignedBy"));
         assertEquals(1, ((List<?>) assignment.get("history")).size());
         var team = store.find(CoordinationStore.RESCUE_TEAMS, "RT-001");
@@ -223,6 +235,33 @@ class CoordinationServiceTests {
 
     private static DistributionRequest.Item item(String resourceId, int quantity) {
         return new DistributionRequest.Item(resourceId, quantity);
+    }
+
+    private void seedOperationalFixtures() {
+        store.transaction(tx -> {
+            tx.set(CoordinationStore.SHELTERS, "SH-001", shelter("SH-001", "Colombo Central School", "Colombo", 1000, 780, true));
+            tx.set(CoordinationStore.SHELTERS, "SH-002", shelter("SH-002", "Gampaha Town Hall", "Gampaha", 800, 560, true));
+            tx.set(CoordinationStore.SHELTERS, "SH-003", shelter("SH-003", "Kalutara Vidyalaya", "Kalutara", 600, 580, true));
+            tx.set(CoordinationStore.SHELTERS, "SH-009", shelter("SH-009", "Colombo Community Centre", "Colombo", 500, 380, true));
+            tx.set(CoordinationStore.SHELTERS, "SH-011", shelter("SH-011", "Full Response Shelter", "Colombo", 500, 500, true));
+            tx.set(CoordinationStore.SHELTERS, "SH-010", shelter("SH-010", "Kurunegala Hall", "Kurunegala", 400, 0, false));
+            tx.set(CoordinationStore.RESOURCES, "RS-001", resource("RS-001", "Food Packs", 12450, 2000));
+            tx.set(CoordinationStore.RESOURCES, "RS-002", resource("RS-002", "Water Bottles", 8200, 3000));
+            tx.set(CoordinationStore.RESOURCES, "RS-003", resource("RS-003", "Medical Kits", 580, 1000));
+            tx.set(CoordinationStore.RESOURCES, "RS-004", resource("RS-004", "Blankets", 1200, 500));
+            tx.set(CoordinationStore.RESOURCES, "RS-005", resource("RS-005", "Portable Generators", 15, 30));
+            return null;
+        });
+    }
+
+    private static Map<String, Object> shelter(String id, String name, String district, long capacity, long occupied, boolean active) {
+        return Map.of("id", id, "name", name, "district", district, "address", "Test address", "shelterType", "Community Hall",
+            "capacity", capacity, "occupied", occupied, "active", active, "facilities", List.of(), "updatedAt", "2026-09-10T00:00:00Z");
+    }
+
+    private static Map<String, Object> resource(String id, String name, long available, long lowStockThreshold) {
+        return Map.of("id", id, "name", name, "category", "Relief", "unit", "Unit", "totalQuantity", available + 1000,
+            "available", available, "lowStockThreshold", lowStockThreshold, "updatedAt", "2026-09-10T00:00:00Z");
     }
 
     private static void assertStatus(HttpStatus status, org.junit.jupiter.api.function.Executable action) {
