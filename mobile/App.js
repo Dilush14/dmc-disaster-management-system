@@ -8,6 +8,7 @@ import { colors } from './src/theme';
 import NetInfo from '@react-native-community/netinfo';
 import { useEffect } from 'react';
 import { syncPendingHazardReports } from './src/services/offlineReports';
+import { registerForPushNotifications } from './src/services/pushNotifications';
 
 export default function App() {
   return <AuthProvider><NavigationContainer><RootNavigator /><StatusBar style="dark" /></NavigationContainer></AuthProvider>;
@@ -29,6 +30,10 @@ function RootNavigator() {
       if (state.isConnected) sync();
     });
     return unsubscribe;
+  }, [user]);
+  useEffect(() => {
+    if (!user) return;
+    registerForPushNotifications().catch(() => { /* Alerts still appear in the Notifications tab. */ });
   }, [user]);
   if (loading) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}><ActivityIndicator size="large" color={colors.primary} /></View>;
   return user ? <AppNavigator /> : <AuthNavigator />;

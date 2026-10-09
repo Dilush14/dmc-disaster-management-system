@@ -4,6 +4,7 @@
     "slug": "dmc-sri-lanka",
     "scheme": "dmc",
     "orientation": "portrait",
+    "plugins": [["expo-notifications", { "defaultChannel": "warnings" }]],
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,

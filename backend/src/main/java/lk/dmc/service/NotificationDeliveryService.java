@@ -22,6 +22,7 @@ public class NotificationDeliveryService {
     private final String smsAccountSid;
     private final String smsAuthToken;
     private final String smsFrom;
+    private final boolean pushEnabled;
 
     public NotificationDeliveryService(
         ObjectMapper json,
@@ -31,8 +32,10 @@ public class NotificationDeliveryService {
         @Value("${app.notifications.sms.enabled:false}") boolean smsEnabled,
         @Value("${app.notifications.sms.account-sid:}") String smsAccountSid,
         @Value("${app.notifications.sms.auth-token:}") String smsAuthToken,
-        @Value("${app.notifications.sms.from:}") String smsFrom
+        @Value("${app.notifications.sms.from:}") String smsFrom,
+        @Value("${app.notifications.push.enabled:true}") boolean pushEnabled
     ) {
+        this.pushEnabled = pushEnabled;
         this.json = json;
         this.emailEnabled = emailEnabled;
         this.emailApiKey = emailApiKey;
@@ -45,6 +48,10 @@ public class NotificationDeliveryService {
 
     public void deliver(Map<String, Object> warning, Map<String, Object> profile) {
         Object channels = warning.get("channels");
+        if (hasChannel(channels, "MOBILE_APP") && pushEnabled && valid(profile.get("expoPushToken"))) {
+            try { sendPush(warning, String.valueOf(profile.get("expoPushToken"))); }
+            catch (Exception error) { System.err.println("Warning push delivery failed: " + error.getMessage()); }
+        }
         if (hasChannel(channels, "EMAIL") && emailEnabled && valid(profile.get("email")) && !emailApiKey.isBlank()) {
             try { sendEmail(warning, String.valueOf(profile.get("email"))); }
             catch (Exception error) { System.err.println("Warning email delivery failed: " + error.getMessage()); }
@@ -56,6 +63,19 @@ public class NotificationDeliveryService {
         }
     }
 
+    private void sendPush(Map<String, Object> warning, String token) throws Exception {
+        String body = json.writeValueAsString(Map.of(
+            "to", token,
+            "title", String.valueOf(warning.get("title")),
+            "body", String.valueOf(warning.get("message")),
+            "sound", "default",
+            "priority", "high",
+            "channelId", "warnings",
+            "data", Map.of("warningId", String.valueOf(warning.get("id")))
+        ));
+        request("https://exp.host/--/api/v2/push/send", body, Map.of("Content-Type", "application/json"));
+    }
+
     private void sendEmail(Map<String, Object> warning, String recipient) throws Exception {
         String body = json.writeValueAsString(Map.of(
             "sender", Map.of("email", emailSender, "name", "DMC Sri Lanka"),
@@ -63,7 +83,7 @@ public class NotificationDeliveryService {
             "subject", warning.get("title"),
             "textContent", warning.get("message")
         ));
-        request("https://api.brevo.com/v3/smtp/email", body, Map.of("api-key", emailApiKey));
+        request("https://api.brevo.com/v3/smtp/email", body, Map.of("api-key", emailApiKey, "Content-Type", "application/json"));
     }
 
     private void sendSms(Map<String, Object> warning, String recipient) throws Exception {
