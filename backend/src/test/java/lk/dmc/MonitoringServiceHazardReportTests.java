@@ -32,4 +32,18 @@ class MonitoringServiceHazardReportTests {
 
         assertEquals(1L, dashboard.get("verifiedReports"));
     }
+
+    @Test
+    void verifiedReportWithDistrictAppearsInDistrictSituation() {
+        when(warnings.list("", "", "", "", 0, 100)).thenReturn(Map.of("items", List.of()));
+        when(reports.staffList()).thenReturn(List.of(
+            Map.of("reportId", "HR-1", "status", "VERIFIED", "district", "Colombo"),
+            Map.of("reportId", "HR-2", "status", "VERIFIED", "district", "Kandy")));
+        when(data.findAll(anyString())).thenReturn(List.of());
+
+        var situation = service.district("Colombo");
+
+        assertEquals(1, ((List<?>) situation.get("hazardReports")).size());
+        assertEquals(1, ((List<?>) service.realtime("Colombo").get("activeItems")).size());
+    }
 }

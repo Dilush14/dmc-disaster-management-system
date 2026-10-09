@@ -185,7 +185,6 @@ public class MonitoringService {
                 return true;
             }
         }
-        // Existing hazard reports currently carry coordinates but no district field; do not infer one.
         return false;
     }
 
@@ -216,7 +215,7 @@ public class MonitoringService {
         var result = new ArrayList<Map<String, Object>>();
         warnings.forEach(item -> result.add(Map.of("type", text(item, "type"), "location", firstDistrict(item),
             "severity", text(item, "severity"), "status", text(item, "status"), "reportedOn", text(item, "createdAt"))));
-        reports.forEach(item -> result.add(Map.of("type", text(item, "hazardType"), "location", text(item, "location"),
+        reports.forEach(item -> result.add(Map.of("type", text(item, "hazardType"), "location", firstDistrict(item),
             "severity", text(item, "severity"), "status", text(item, "status"), "reportedOn", text(item, "submittedAt"))));
         return result;
     }
