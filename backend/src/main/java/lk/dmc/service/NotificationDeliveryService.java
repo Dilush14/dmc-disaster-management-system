@@ -83,7 +83,7 @@ public class NotificationDeliveryService {
             "subject", warning.get("title"),
             "textContent", warning.get("message")
         ));
-        request("https://api.brevo.com/v3/smtp/email", body, Map.of("api-key", emailApiKey));
+        request("https://api.brevo.com/v3/smtp/email", body, Map.of("api-key", emailApiKey, "Content-Type", "application/json"));
     }
 
     private void sendSms(Map<String, Object> warning, String recipient) throws Exception {
