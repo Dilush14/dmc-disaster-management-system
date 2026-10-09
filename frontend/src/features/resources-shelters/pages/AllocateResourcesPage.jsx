@@ -1,39 +1,19 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, Search } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Search } from 'lucide-react';
 import { allocateResources, listResources, listShelters } from '../services/resourcesSheltersService';
 import {
   checkShelterCapacity, checkStock, filterShelters, TRANSPORT_METHODS, validateAllocationDetails, validateResourceSelection,
 } from '../utils/resourcesShelters';
 import { CapacityWarningDialog, StockWarningDialog } from '../components/WarningDialogs';
 import ActiveResponseBanner from '../components/ActiveResponseBanner';
-import { Card, ErrorBanner, Field, formatDate, inputClass, Loading, PageHeader, PrimaryButton, SecondaryButton, Select, StatusBadge, useAsync } from '../components/ui';
+import { Card, ErrorBanner, Field, formatDate, inputClass, Loading, PageHeader, PrimaryButton, SecondaryButton, Select, StatusBadge, Stepper, useAsync } from '../components/ui';
 
 const steps = ['Select Resources', 'Select Destination', 'Allocation Details', 'Review'];
 const today = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 };
-
-function Stepper({ step }) {
-  return (
-    <ol className="mb-6 grid grid-cols-4 gap-2">
-      {steps.map((label, index) => {
-        const number = index + 1;
-        const done = step > number;
-        const active = step === number;
-        return (
-          <li key={label} className="flex flex-col items-center gap-1 text-center">
-            <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${done ? 'bg-emerald-500 text-white' : active ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
-              {done ? <Check size={16} /> : number}
-            </span>
-            <span className={`text-xs font-semibold ${active ? 'text-blue-700' : 'text-slate-500'}`}>{label}</span>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
 
 export default function AllocateResourcesPage() {
   const resources = useAsync(signal => listResources({ signal }), []);
@@ -128,7 +108,7 @@ export default function AllocateResourcesPage() {
       <PageHeader title="Allocate Resources" subtitle="Send relief supplies from stock to a shelter." />
       <ActiveResponseBanner />
       <Card>
-        <Stepper step={step} />
+        <Stepper steps={steps} step={step} />
         {step === 1 && <ResourceStep resources={resources.data} selection={selection} setSelection={setSelection} error={errors.selection} />}
         {step === 2 && <DestinationStep shelters={shelters.data} shelterId={shelterId} setShelterId={setShelterId} />}
         {step === 3 && <DetailsStep details={details} setDetails={setDetails} errors={errors} shelter={shelter} items={selectedItems} />}

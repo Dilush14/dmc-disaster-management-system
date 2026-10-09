@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  availableSpace, canChangeAvailability, checkShelterCapacity, filterTeams, validateTeamForm, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate,
+  assignmentConflictKind, availableSpace, canCancelAssignment, canChangeAvailability, filterAssignments, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam, checkShelterCapacity, filterTeams, validateTeamForm, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate,
   validateAllocationDetails, validateOccupancy, validateResourceForm, validateResourceSelection, validateShelterForm,
 } from './resourcesShelters.js';
 
@@ -98,4 +98,37 @@ test('availability cannot change while a team is on assignment', () => {
   assert.equal(canChangeAvailability({ status: 'AVAILABLE' }), true);
   assert.equal(canChangeAvailability({ status: 'COMM_FAILURE' }), true);
   for (const status of ['ASSIGNED', 'DISPATCHED', 'RESPONDING']) assert.equal(canChangeAvailability({ status }), false);
+});
+
+test('assign team wizard validates shelter, team and details', () => {
+  const shelter = { id: 'SH-009', name: 'Kolonnawa', capacity: 500, occupied: 380, status: 'Active' };
+  assert.deepEqual(validateAssignmentShelter(shelter, '50'), {});
+  assert.ok(validateAssignmentShelter(null, '50').shelterId);
+  assert.ok(validateAssignmentShelter({ ...shelter, status: 'Inactive' }, '5').shelterId);
+  assert.ok(validateAssignmentShelter(shelter, '0').expectedEvacuees);
+  assert.ok(validateAssignmentShelter(shelter, '').expectedEvacuees);
+  assert.ok(validateAssignmentShelter(shelter, '2.5').expectedEvacuees);
+  assert.equal(checkShelterCapacity(shelter, 121).shortfall, 1);
+  assert.equal(validateAssignmentTeam({ status: 'AVAILABLE' }), '');
+  assert.ok(validateAssignmentTeam({ status: 'DISPATCHED' }));
+  assert.ok(validateAssignmentTeam(null));
+  assert.deepEqual(validateAssignmentDetails({ pickupLocation: 'Kolonnawa junction', notes: '' }), {});
+  assert.ok(validateAssignmentDetails({ pickupLocation: '  ', notes: '' }).pickupLocation);
+  assert.ok(validateAssignmentDetails({ pickupLocation: 'x'.repeat(201), notes: '' }).pickupLocation);
+  assert.ok(validateAssignmentDetails({ pickupLocation: 'A', notes: 'x'.repeat(301) }).notes);
+});
+
+test('assignment conflicts and cancellation rules', () => {
+  assert.equal(assignmentConflictKind({ status: 409, message: 'Insufficient capacity: X can take 20 more people' }), 'capacity');
+  assert.equal(assignmentConflictKind({ status: 409, message: 'Team is no longer available: X is assigned.' }), 'team');
+  assert.equal(assignmentConflictKind({ status: 503, message: 'Unable to access' }), null);
+  assert.equal(canCancelAssignment({ status: 'ASSIGNED' }), true);
+  assert.equal(canCancelAssignment({ status: 'DISPATCHED' }), false);
+  const rows = [
+    { id: 'TA-1', teamName: 'Navy Boat', shelterName: 'Kolonnawa', district: 'Colombo', status: 'ASSIGNED', pickupLocation: 'Junction' },
+    { id: 'TA-2', teamName: 'Army', shelterName: 'Gampaha Hall', district: 'Gampaha', status: 'CANCELLED', pickupLocation: 'Town' },
+  ];
+  assert.deepEqual(filterAssignments(rows, { query: 'navy' }).map(row => row.id), ['TA-1']);
+  assert.deepEqual(filterAssignments(rows, { status: 'CANCELLED' }).map(row => row.id), ['TA-2']);
+  assert.deepEqual(filterAssignments(rows, { district: 'Colombo' }).map(row => row.id), ['TA-1']);
 });

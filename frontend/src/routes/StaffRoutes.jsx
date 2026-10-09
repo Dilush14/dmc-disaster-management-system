@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { isStaffRole, observeStaffAuth, logoutStaff } from '../services/firebase/staffAuthService';
 import { registrationRoles } from '../utils/validation';
-import { Activity, AlertTriangle, BarChart3, Bell, Boxes, FileText, House, LayoutDashboard, LifeBuoy, MapPinned, Search, Settings, Users } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Bell, Boxes, ClipboardList, FileText, House, LayoutDashboard, LifeBuoy, MapPinned, Search, Settings, Users } from 'lucide-react';
 import MonitoringDashboardPage from '../features/monitoring-reports/pages/MonitoringDashboardPage';
 import DistrictResponseOverviewPage from '../features/monitoring-reports/pages/DistrictResponseOverviewPage';
 import RealtimeMonitoringPage from '../features/monitoring-reports/pages/RealtimeMonitoringPage';
@@ -29,6 +29,9 @@ import AllocateResourcesPage from '../features/resources-shelters/pages/Allocate
 import DistributionHistoryPage from '../features/resources-shelters/pages/DistributionHistoryPage';
 import ShortagesAlertsPage from '../features/resources-shelters/pages/ShortagesAlertsPage';
 import RescueTeamsPage from '../features/resources-shelters/pages/RescueTeamsPage';
+import AssignTeamPage from '../features/resources-shelters/pages/AssignTeamPage';
+import TeamAssignmentsPage from '../features/resources-shelters/pages/TeamAssignmentsPage';
+import AssignmentDetailsPage from '../features/resources-shelters/pages/AssignmentDetailsPage';
 
 const navItems = [
   { to: '/staff/monitoring', label: 'Dashboard', icon: LayoutDashboard },
@@ -39,6 +42,7 @@ const navItems = [
   { to: '/staff/monitoring/Colombo/resources', label: 'Resources & Shelters', icon: House },
   { to: '/staff/resources-shelters', label: 'Shelter Coordination', icon: Boxes },
   { to: '/staff/resources-shelters/teams', label: 'Rescue Teams', icon: LifeBuoy },
+  { to: '/staff/resources-shelters/teams/assignments', label: 'Team Assignments', icon: ClipboardList },
   { to: '/staff/reports/generate', label: 'Generate Reports', icon: FileText },
   { to: '/staff/reports/history', label: 'Generated Reports', icon: BarChart3 },
   { to: '/staff/users', label: 'Users', icon: Users },
@@ -180,6 +184,9 @@ export default function StaffRoutes() {
             <Route path="resources-shelters/distributions" element={<DistributionHistoryPage />} />
             <Route path="resources-shelters/alerts" element={<ShortagesAlertsPage />} />
             <Route path="resources-shelters/teams" element={<RescueTeamsPage />} />
+            <Route path="resources-shelters/teams/assign" element={<AssignTeamPage />} />
+            <Route path="resources-shelters/teams/assignments" element={<TeamAssignmentsPage />} />
+            <Route path="resources-shelters/teams/assignments/:assignmentId" element={<AssignmentDetailsPage />} />
             <Route path="reports/generate" element={<GenerateReportPage />} />
             <Route path="reports/generate/configure" element={<ConfigureReportPage />} />
             <Route path="reports/generate/preview" element={<ReportPreviewPage />} />

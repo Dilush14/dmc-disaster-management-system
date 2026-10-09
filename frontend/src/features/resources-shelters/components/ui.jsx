@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, RefreshCw, X } from 'lucide-react';
 
 const badgeTones = {
   Active: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
@@ -25,7 +25,7 @@ const badgeTones = {
 };
 
 const statusLabels = {
-  PENDING: 'Pending', IN_TRANSIT: 'In Transit', COMPLETED: 'Completed', CANCELLED: 'Cancelled',
+    PENDING: 'Pending', IN_TRANSIT: 'In Transit', COMPLETED: 'Completed', CANCELLED: 'Cancelled',
   AVAILABLE: 'Available', ASSIGNED: 'Assigned', DISPATCHED: 'Dispatched', RESPONDING: 'Responding', UNAVAILABLE: 'Unavailable', COMM_FAILURE: 'Comm Failure',
 };
 
@@ -55,7 +55,8 @@ const sections = [
   { to: '/staff/resources-shelters', label: 'Overview', end: true },
   { to: '/staff/resources-shelters/shelters', label: 'Shelters' },
   { to: '/staff/resources-shelters/resources', label: 'Resources' },
-  { to: '/staff/resources-shelters/teams', label: 'Rescue Teams' },
+  { to: '/staff/resources-shelters/teams', label: 'Rescue Teams', end: true },
+  { to: '/staff/resources-shelters/teams/assignments', label: 'Team Assignments' },
   { to: '/staff/resources-shelters/allocate', label: 'Allocate' },
   { to: '/staff/resources-shelters/distributions', label: 'Distribution History' },
   { to: '/staff/resources-shelters/alerts', label: 'Shortages & Alerts' },
@@ -85,6 +86,27 @@ export function PageHeader({ title, subtitle, action }) {
         ))}
       </nav>
     </div>
+  );
+}
+
+/** Numbered wizard progress used by the allocation and team-assignment flows. */
+export function Stepper({ steps, step }) {
+  return (
+    <ol className={`mb-6 grid gap-2`} style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
+      {steps.map((label, index) => {
+        const number = index + 1;
+        const done = step > number;
+        const active = step === number;
+        return (
+          <li key={label} className="flex flex-col items-center gap-1 text-center">
+            <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${done ? 'bg-emerald-500 text-white' : active ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+              {done ? <Check size={16} /> : number}
+            </span>
+            <span className={`text-xs font-semibold ${active ? 'text-blue-700' : 'text-slate-500'}`}>{label}</span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

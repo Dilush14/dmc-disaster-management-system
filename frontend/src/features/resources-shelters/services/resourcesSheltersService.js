@@ -56,3 +56,8 @@ export const createTeam = body => request('/teams', { method: 'POST', body });
 export const updateTeam = (id, body) => request(`/teams/${encodeURIComponent(id)}`, { method: 'PUT', body });
 export const setTeamAvailability = (id, status) =>
   request(`/teams/${encodeURIComponent(id)}/availability`, { method: 'PATCH', body: { status } });
+
+export const listTeamAssignments = options => request('/team-assignments', options);
+export const getTeamAssignment = (id, options) => request(`/team-assignments/${encodeURIComponent(id)}`, options);
+export const assignTeam = body => request('/team-assignments', { method: 'POST', body });
+export const cancelTeamAssignment = id => request(`/team-assignments/${encodeURIComponent(id)}/cancel`, { method: 'POST' });

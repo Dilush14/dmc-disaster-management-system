@@ -294,6 +294,103 @@ public class CoordinationService {
         });
     }
 
+    // ---- Team assignments ----
+
+    public List<Map<String, Object>> listAssignments(String status) {
+        return store.list(TEAM_ASSIGNMENTS).stream()
+            .filter(row -> status == null || status.isBlank() || status.equalsIgnoreCase(String.valueOf(row.get("status"))))
+            .sorted(Comparator.comparing((Map<String, Object> row) -> String.valueOf(row.get("assignedAt"))).reversed())
+            .toList();
+    }
+
+    public Map<String, Object> getAssignment(String id) {
+        return requireRow(TEAM_ASSIGNMENTS, id, "Team assignment");
+    }
+
+    /** Assigns an available team to move evacuees to a shelter. Capacity and team availability are re-checked inside one transaction. */
+    public Map<String, Object> assignTeam(AssignTeamRequest request, String actorId) {
+        return store.transaction(tx -> {
+            Map<String, Object> shelter = requireRow(tx.get(SHELTERS, request.shelterId()), "Shelter");
+            Map<String, Object> team = requireRow(tx.get(RESCUE_TEAMS, request.teamId()), "Rescue team");
+            long space = num(shelter.get("capacity")) - num(shelter.get("occupied"));
+            if (!Boolean.TRUE.equals(shelter.get("active")) || request.expectedEvacuees() > space)
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Insufficient capacity: " + shelter.get("name") + " can take "
+                    + Math.max(0, space) + " more people but " + request.expectedEvacuees() + " are expected.");
+            if (!"AVAILABLE".equals(team.get("status")))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Team is no longer available: " + team.get("name") + " is "
+                    + String.valueOf(team.get("status")).toLowerCase(Locale.ROOT).replace('_', ' ') + ".");
+
+            String now = now();
+            String id = newId("TA");
+            Map<String, Object> assignment = new LinkedHashMap<>();
+            assignment.put("id", id);
+            assignment.put("teamId", request.teamId());
+            assignment.put("teamName", team.get("name"));
+            assignment.put("shelterId", request.shelterId());
+            assignment.put("shelterName", shelter.get("name"));
+            assignment.put("district", shelter.get("district"));
+            assignment.put("expectedEvacuees", request.expectedEvacuees().longValue());
+            assignment.put("pickupLocation", request.pickupLocation().trim());
+            assignment.put("notes", blankToEmpty(request.notes()));
+            assignment.put("supportTeamIds", List.of());
+            assignment.put("status", "ASSIGNED");
+            assignment.put("assignedBy", actorId);
+            assignment.put("assignedAt", now);
+            assignment.put("dispatchedAt", null);
+            assignment.put("arrivedAt", null);
+            assignment.put("completedAt", null);
+            assignment.put("evacueesDelivered", 0L);
+            assignment.put("history", List.of(historyEntry("ASSIGNED", now, actorId, "Team assigned to " + shelter.get("name"))));
+
+            team.put("status", "ASSIGNED");
+            team.put("currentAssignmentId", id);
+            team.put("updatedAt", now);
+            team.put("updatedBy", actorId);
+            tx.set(RESCUE_TEAMS, request.teamId(), team);
+            tx.set(TEAM_ASSIGNMENTS, id, assignment);
+            return assignment;
+        });
+    }
+
+    /** Cancels an assignment that has not been dispatched yet and frees the team. */
+    public Map<String, Object> cancelAssignment(String id, String actorId) {
+        return store.transaction(tx -> {
+            Map<String, Object> assignment = requireRow(tx.get(TEAM_ASSIGNMENTS, id), "Team assignment");
+            String teamId = String.valueOf(assignment.get("teamId"));
+            Map<String, Object> team = tx.get(RESCUE_TEAMS, teamId);
+            String current = String.valueOf(assignment.get("status"));
+            if (!"ASSIGNED".equals(current))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Only assignments that have not been dispatched can be cancelled (this one is "
+                    + current.toLowerCase(Locale.ROOT).replace('_', ' ') + ").");
+
+            String now = now();
+            List<Object> history = new ArrayList<>(assignment.get("history") instanceof List<?> list ? list : List.of());
+            history.add(historyEntry("CANCELLED", now, actorId, "Assignment cancelled"));
+            assignment.put("status", "CANCELLED");
+            assignment.put("history", history);
+            tx.set(TEAM_ASSIGNMENTS, id, assignment);
+            // Free the team only if it is still held by this assignment.
+            if (team != null && id.equals(team.get("currentAssignmentId"))) {
+                team = new LinkedHashMap<>(team);
+                team.put("status", "AVAILABLE");
+                team.put("currentAssignmentId", null);
+                team.put("updatedAt", now);
+                team.put("updatedBy", actorId);
+                tx.set(RESCUE_TEAMS, teamId, team);
+            }
+            return assignment;
+        });
+    }
+
+    private static Map<String, Object> historyEntry(String status, String at, String by, String note) {
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("status", status);
+        entry.put("at", at);
+        entry.put("by", by);
+        entry.put("note", note);
+        return entry;
+    }
+
     // ---- Dashboard ----
 
     public Map<String, Object> overview(String district) {

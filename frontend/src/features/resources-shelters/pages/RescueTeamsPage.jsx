@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Plus, Search, Send } from 'lucide-react';
 import { listTeams, setTeamAvailability } from '../services/resourcesSheltersService';
 import { canChangeAvailability, DISTRICTS, filterTeams, paginate, TEAM_AGENCIES, TEAM_STATUSES } from '../utils/resourcesShelters';
 import { TeamFormDialog } from '../components/FormDialogs';
@@ -36,7 +37,12 @@ export default function RescueTeamsPage() {
       <PageHeader
         title="Rescue Teams"
         subtitle="Field teams from DMC and partner agencies, with their current availability."
-        action={<PrimaryButton onClick={() => setEditing('new')}><Plus size={16} />Register Team</PrimaryButton>}
+        action={(
+          <div className="flex gap-2">
+            <Link to="/staff/resources-shelters/teams/assign" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Send size={16} />Assign Team</Link>
+            <PrimaryButton onClick={() => setEditing('new')}><Plus size={16} />Register Team</PrimaryButton>
+          </div>
+        )}
       />
       {error && <ErrorBanner message={`Rescue team information is unavailable. ${error}`} onRetry={reload} />}
       {actionError && <ErrorBanner message={actionError} />}
@@ -73,6 +79,8 @@ export default function RescueTeamsPage() {
                       <td>
                         <div className="flex flex-wrap gap-3">
                           <button type="button" onClick={() => setEditing(team)} className="text-sm font-semibold text-blue-700">Edit</button>
+                          {team.status === 'AVAILABLE' && <Link to={`/staff/resources-shelters/teams/assign?teamId=${encodeURIComponent(team.id)}`} className="text-sm font-semibold text-blue-700">Assign</Link>}
+                          {team.currentAssignmentId?.startsWith('TA-') && <Link to={`/staff/resources-shelters/teams/assignments/${encodeURIComponent(team.currentAssignmentId)}`} className="text-sm font-semibold text-slate-700">View Assignment</Link>}
                           <button
                             type="button"
                             disabled={locked || busyId === team.id}

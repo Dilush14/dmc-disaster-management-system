@@ -145,6 +145,45 @@ class StaffCoordinationApiTests {
         }
 
         @Test
+        void teamAssignmentIsCreatedFetchedAndCancelled() throws Exception {
+            String body = mvc.perform(post("/api/staff/resources-shelters/team-assignments").header("Authorization", "Bearer officer-token")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"teamId\":\"RT-003\",\"shelterId\":\"SH-001\",\"expectedEvacuees\":40,\"pickupLocation\":\"Wellawatte\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("ASSIGNED"))
+                .andExpect(jsonPath("$.assignedBy").value("officer-1"))
+                .andReturn().getResponse().getContentAsString();
+            String id = com.jayway.jsonpath.JsonPath.read(body, "$.id");
+            mvc.perform(get("/api/staff/resources-shelters/team-assignments/" + id).header("Authorization", "Bearer officer-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.teamName").value("Colombo Fire Brigade Team B"));
+            mvc.perform(post("/api/staff/resources-shelters/team-assignments/" + id + "/cancel").header("Authorization", "Bearer officer-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+            mvc.perform(get("/api/staff/resources-shelters/teams/RT-003").header("Authorization", "Bearer officer-token"))
+                .andExpect(jsonPath("$.status").value("AVAILABLE"));
+        }
+
+        @Test
+        void teamAssignmentValidationAndConflicts() throws Exception {
+            mvc.perform(post("/api/staff/resources-shelters/team-assignments").header("Authorization", "Bearer officer-token")
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"teamId\":\"RT-001\",\"shelterId\":\"SH-001\",\"expectedEvacuees\":0}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.expectedEvacuees").exists())
+                .andExpect(jsonPath("$.errors.pickupLocation").exists());
+            mvc.perform(post("/api/staff/resources-shelters/team-assignments").header("Authorization", "Bearer officer-token")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"teamId\":\"RT-001\",\"shelterId\":\"SH-003\",\"expectedEvacuees\":500,\"pickupLocation\":\"Kalutara\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Insufficient capacity")));
+            mvc.perform(post("/api/staff/resources-shelters/team-assignments").header("Authorization", "Bearer officer-token")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"teamId\":\"RT-007\",\"shelterId\":\"SH-004\",\"expectedEvacuees\":5,\"pickupLocation\":\"Kandy\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Team is no longer available")));
+        }
+
+        @Test
         void overAllocationReturnsConflict() throws Exception {
             mvc.perform(post("/api/staff/resources-shelters/distributions").header("Authorization", "Bearer officer-token").contentType(MediaType.APPLICATION_JSON)
                     .content("{\"items\":[{\"resourceId\":\"RS-003\",\"quantity\":1000}],\"shelterId\":\"SH-002\","

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Pencil } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Pencil, Send } from 'lucide-react';
 import MonitoringTabs from '../../monitoring-reports/components/MonitoringTabs';
 import { getShelter, updateOccupancy } from '../services/resourcesSheltersService';
 import { availableSpace, checkShelterCapacity, occupancyRate, validateOccupancy } from '../utils/resourcesShelters';
@@ -28,7 +28,10 @@ export default function ShelterDetailsPage() {
           <h1 className="text-2xl font-black text-slate-900">{shelter.name}</h1>
           <StatusBadge status={shelter.status} />
         </div>
-        <SecondaryButton onClick={() => setEditing(true)}><Pencil size={14} />Edit</SecondaryButton>
+        <div className="flex gap-2">
+          {shelter.status === 'Active' && <Link to={`/staff/resources-shelters/teams/assign?shelterId=${encodeURIComponent(shelter.id)}`} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"><Send size={14} />Assign Team</Link>}
+          <SecondaryButton onClick={() => setEditing(true)}><Pencil size={14} />Edit</SecondaryButton>
+        </div>
       </div>
       <MonitoringTabs tabs={tabs} activeTab={tab} onChange={setTab} />
 

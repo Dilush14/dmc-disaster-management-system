@@ -99,4 +99,21 @@ public class StaffCoordinationController {
                                                @AuthenticationPrincipal PublicIdentity identity) {
         return coordination.setAvailability(id, request, identity.id());
     }
+    @GetMapping("/team-assignments")
+    public List<Map<String, Object>> assignments(@RequestParam(required = false) String status) {
+        return coordination.listAssignments(status);
+    }
+    @GetMapping("/team-assignments/{id}")
+    public Map<String, Object> assignment(@PathVariable String id) {
+        return coordination.getAssignment(id);
+    }
+    @PostMapping("/team-assignments")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Map<String, Object> assignTeam(@Valid @RequestBody AssignTeamRequest request, @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.assignTeam(request, identity.id());
+    }
+    @PostMapping("/team-assignments/{id}/cancel")
+    public Map<String, Object> cancelAssignment(@PathVariable String id, @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.cancelAssignment(id, identity.id());
+    }
 }

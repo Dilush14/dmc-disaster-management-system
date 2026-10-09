@@ -183,3 +183,53 @@ export function filterTeams(teams, { query = '', district = 'All', agency = 'All
     && (agency === 'All' || team.agency === agency)
     && (status === 'All' || team.status === status));
 }
+
+export const ASSIGNMENT_STATUSES = ['ASSIGNED', 'DISPATCHED', 'RESPONDING', 'COMPLETED', 'CANCELLED', 'COMM_FAILURE'];
+
+/** Step 1 of the assign-team wizard: an active shelter and a whole number of evacuees (min 1). */
+export function validateAssignmentShelter(shelter, expectedEvacuees) {
+  const errors = {};
+  if (!shelter) errors.shelterId = 'Select a destination shelter.';
+  else if (shelter.status === 'Inactive') errors.shelterId = 'This shelter is inactive. Choose another shelter.';
+  const expected = Number(expectedEvacuees);
+  if (expectedEvacuees === '' || expectedEvacuees === undefined || !Number.isInteger(expected) || expected < 1) errors.expectedEvacuees = 'Expected evacuees must be a whole number of 1 or more.';
+  return errors;
+}
+
+/** Step 2: only teams currently AVAILABLE can be assigned. */
+export function validateAssignmentTeam(team) {
+  if (!team) return 'Select a rescue team.';
+  if (team.status !== 'AVAILABLE') return 'This team is not available. Choose another team.';
+  return '';
+}
+
+/** Step 3: pickup location required (max 200), notes optional (max 300). */
+export function validateAssignmentDetails(details) {
+  const errors = {};
+  const pickup = (details.pickupLocation || '').trim();
+  if (!pickup) errors.pickupLocation = 'Pickup location is required.';
+  else if (pickup.length > 200) errors.pickupLocation = 'Pickup location must be 200 characters or fewer.';
+  if ((details.notes || '').length > 300) errors.notes = 'Notes must be 300 characters or fewer.';
+  return errors;
+}
+
+/** Classifies a 409 from POST /team-assignments so the wizard can return to the right step. */
+export function assignmentConflictKind(error) {
+  if (error?.status !== 409) return null;
+  const message = String(error.message || '').toLowerCase();
+  if (message.includes('capacity')) return 'capacity';
+  if (message.includes('team')) return 'team';
+  return null;
+}
+
+export function canCancelAssignment(assignment) {
+  return assignment?.status === 'ASSIGNED';
+}
+
+export function filterAssignments(rows, { query = '', status = 'All', district = 'All' } = {}) {
+  const text = query.trim().toLowerCase();
+  return rows.filter(row =>
+    (!text || [row.id, row.teamName, row.shelterName, row.pickupLocation].some(value => String(value || '').toLowerCase().includes(text)))
+    && (status === 'All' || row.status === status)
+    && (district === 'All' || row.district === district));
+}
