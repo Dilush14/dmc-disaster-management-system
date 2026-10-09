@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CheckCircle2, Search } from 'lucide-react';
-import { assignTeam, listShelters, listTeams } from '../services/resourcesSheltersService';
+import { ArrowLeft, ArrowRight, CheckCircle2, Search, Send } from 'lucide-react';
+import { assignTeam, dispatchTeamAssignment, listShelters, listTeams } from '../services/resourcesSheltersService';
 import {
-  assignmentConflictKind, checkShelterCapacity, filterShelters, filterTeams, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam,
+  assignmentConflictKind, canDispatchAssignment, checkShelterCapacity, filterShelters, filterTeams, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam,
 } from '../utils/resourcesShelters';
 import { CapacityWarningDialog } from '../components/WarningDialogs';
 import ActiveResponseBanner from '../components/ActiveResponseBanner';
@@ -24,6 +24,8 @@ export default function AssignTeamPage() {
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [recorded, setRecorded] = useState(null);
+  const [dispatching, setDispatching] = useState(false);
+  const [dispatchError, setDispatchError] = useState('');
 
   const shelter = (shelters.data || []).find(item => item.id === shelterId);
   const team = (teams.data || []).find(item => item.id === teamId);
@@ -35,7 +37,7 @@ export default function AssignTeamPage() {
   if (!shelters.data || !teams.data) return <div className="space-y-6"><PageHeader title="Assign Rescue Team" /><Loading /></div>;
 
   const reset = () => {
-    setStep(1); setShelterId(''); setTeamId(''); setRecorded(null); setSubmitError('');
+    setStep(1); setShelterId(''); setTeamId(''); setRecorded(null); setSubmitError(''); setDispatchError('');
     setDetails({ expectedEvacuees: '', pickupLocation: '', notes: '' });
     shelters.reload(); teams.reload();
   };
@@ -98,6 +100,18 @@ export default function AssignTeamPage() {
     }
   };
 
+  const dispatchNow = async () => {
+    setDispatching(true);
+    setDispatchError('');
+    try {
+      setRecorded(await dispatchTeamAssignment(recorded.id));
+    } catch (failure) {
+      setDispatchError(failure.message);
+    } finally {
+      setDispatching(false);
+    }
+  };
+
   if (recorded) {
     return (
       <div className="space-y-6">
@@ -107,8 +121,11 @@ export default function AssignTeamPage() {
           <h2 className="mt-3 text-xl font-black text-slate-900">Team assigned</h2>
           <p className="mt-1 text-sm text-slate-600">{recorded.id} · {recorded.teamName} will move {Number(recorded.expectedEvacuees).toLocaleString()} evacuees from {recorded.pickupLocation} to {recorded.shelterName}.</p>
           <div className="mt-2"><StatusBadge status={recorded.status} /></div>
-          <div className="mt-5 flex justify-center gap-2">
+          {recorded.status === 'DISPATCHED' && <p role="status" className="mt-3 text-sm font-semibold text-emerald-700">Team dispatched.</p>}
+          {dispatchError && <div className="mt-3 text-left"><ErrorBanner message={dispatchError} onRetry={dispatchNow} /></div>}
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
             <SecondaryButton onClick={reset}>New Assignment</SecondaryButton>
+            {canDispatchAssignment(recorded) && <PrimaryButton disabled={dispatching} onClick={dispatchNow}><Send size={16} />{dispatching ? 'Dispatching…' : 'Dispatch now'}</PrimaryButton>}
             <Link to={`/staff/resources-shelters/teams/assignments/${encodeURIComponent(recorded.id)}`} className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">View Assignment</Link>
           </div>
         </Card>

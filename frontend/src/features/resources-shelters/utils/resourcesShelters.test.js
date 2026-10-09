@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  assignmentConflictKind, availableSpace, canCancelAssignment, canChangeAvailability, filterAssignments, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam, checkShelterCapacity, filterTeams, validateTeamForm, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate,
+  assignmentConflictKind, availableSpace, canCancelAssignment, canRecordArrival, previewArrival, validateArrival, canDispatchAssignment, canMarkResponding, canChangeAvailability, filterAssignments, validateAssignmentDetails, validateAssignmentShelter, validateAssignmentTeam, checkShelterCapacity, filterTeams, validateTeamForm, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate, peopleLabel,
   validateAllocationDetails, validateOccupancy, validateResourceForm, validateResourceSelection, validateShelterForm,
 } from './resourcesShelters.js';
 
@@ -131,4 +131,44 @@ test('assignment conflicts and cancellation rules', () => {
   assert.deepEqual(filterAssignments(rows, { query: 'navy' }).map(row => row.id), ['TA-1']);
   assert.deepEqual(filterAssignments(rows, { status: 'CANCELLED' }).map(row => row.id), ['TA-2']);
   assert.deepEqual(filterAssignments(rows, { district: 'Colombo' }).map(row => row.id), ['TA-1']);
+});
+
+test('dispatch is allowed from assigned or comm failure, responding only after dispatch', () => {
+  assert.equal(canDispatchAssignment({ status: 'ASSIGNED' }), true);
+  assert.equal(canDispatchAssignment({ status: 'COMM_FAILURE' }), true);
+  assert.equal(canDispatchAssignment({ status: 'DISPATCHED' }), false);
+  assert.equal(canDispatchAssignment(null), false);
+  assert.equal(canMarkResponding({ status: 'DISPATCHED' }), true);
+  assert.equal(canMarkResponding({ status: 'ASSIGNED' }), false);
+  assert.equal(canMarkResponding({ status: 'RESPONDING' }), false);
+});
+
+test('arrival preview, validation and allowed statuses', () => {
+  // Use case scenario: capacity 500, occupancy 380; 50 evacuees arrive.
+  const shelter = { capacity: 500, occupied: 380 };
+  assert.deepEqual(previewArrival(shelter, 50), {
+    before: { occupied: 380, available: 120 },
+    after: { occupied: 430, available: 70 },
+    exceedsCapacity: false,
+    overBy: 0,
+  });
+  assert.equal(previewArrival(shelter, 120).exceedsCapacity, false);
+  assert.equal(previewArrival(shelter, 121).exceedsCapacity, true);
+  assert.equal(previewArrival(shelter, 121).after.available, 0);
+  assert.equal(previewArrival(shelter, 121).overBy, 1);
+  assert.equal(validateArrival('50'), '');
+  assert.equal(validateArrival('0'), '');
+  assert.notEqual(validateArrival(''), '');
+  assert.notEqual(validateArrival('-1'), '');
+  assert.notEqual(validateArrival('2.5'), '');
+  assert.equal(canRecordArrival({ status: 'DISPATCHED' }), true);
+  assert.equal(canRecordArrival({ status: 'RESPONDING' }), true);
+  assert.equal(canRecordArrival({ status: 'ASSIGNED' }), false);
+  assert.equal(canRecordArrival({ status: 'COMPLETED' }), false);
+});
+
+test('people label uses singular for one person', () => {
+  assert.equal(peopleLabel(1), '1 person');
+  assert.equal(peopleLabel(0), '0 people');
+  assert.equal(peopleLabel(1300), '1,300 people');
 });

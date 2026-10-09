@@ -390,6 +390,135 @@ public class CoordinationService {
         });
     }
 
+    /** Sends an assigned team out. Allowed from ASSIGNED, or COMM_FAILURE to retry a dispatch that did not reach the team. */
+    public Map<String, Object> dispatch(String id, String actorId) {
+        return dispatch(id, actorId, null);
+    }
+
+    public Map<String, Object> dispatch(String id, String actorId, String actorName) {
+        return advanceAssignment(id, Set.of("ASSIGNED", "COMM_FAILURE"), "DISPATCHED", "dispatchedAt",
+            actorId, actorName, "Team dispatched", "Only assigned teams can be dispatched");
+    }
+
+    /** Records that a dispatched team has started responding on the ground. */
+    public Map<String, Object> markResponding(String id, String actorId) {
+        return markResponding(id, actorId, null);
+    }
+
+    public Map<String, Object> markResponding(String id, String actorId, String actorName) {
+        return advanceAssignment(id, Set.of("DISPATCHED"), "RESPONDING", "respondingAt",
+            actorId, actorName, "Team responding", "Only dispatched teams can be marked as responding");
+    }
+
+    /**
+     * Records a team's arrival at its shelter: the shelter occupancy, an occupancy history entry, the completed
+     * assignment and the freed team are written together, so a rejected arrival changes nothing.
+     */
+    public Map<String, Object> recordArrival(String id, ArrivalRequest request, String actorId) {
+        return recordArrival(id, request, actorId, null);
+    }
+
+    public Map<String, Object> recordArrival(String id, ArrivalRequest request, String actorId, String actorName) {
+        return store.transaction(tx -> {
+            Map<String, Object> assignment = requireRow(tx.get(TEAM_ASSIGNMENTS, id), "Team assignment");
+            String teamId = String.valueOf(assignment.get("teamId"));
+            String shelterId = String.valueOf(assignment.get("shelterId"));
+            Map<String, Object> team = tx.get(RESCUE_TEAMS, teamId);
+            Map<String, Object> shelter = requireRow(tx.get(SHELTERS, shelterId), "Shelter");
+            String current = String.valueOf(assignment.get("status"));
+            if (!Set.of("DISPATCHED", "RESPONDING").contains(current))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Arrival can only be recorded for dispatched or responding teams (this one is "
+                    + current.toLowerCase(Locale.ROOT).replace('_', ' ') + ").");
+            long capacity = num(shelter.get("capacity"));
+            long previous = num(shelter.get("occupied"));
+            if (previous != request.expectedOccupancy())
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Occupancy was changed by someone else (now " + previous + "). Please review the latest value and try again.");
+            long delivered = request.evacueesDelivered();
+            long occupied = previous + delivered;
+            if (occupied > capacity)
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Insufficient shelter capacity: " + delivered + " evacuees would bring "
+                    + shelter.get("name") + " to " + occupied + ", above its capacity of " + capacity + ".");
+
+            String now = now();
+            shelter.put("occupied", occupied);
+            shelter.put("updatedAt", now);
+            String historyId = newId("OH");
+            Map<String, Object> occupancy = new LinkedHashMap<>();
+            occupancy.put("id", historyId);
+            occupancy.put("shelterId", shelterId);
+            occupancy.put("assignmentId", id);
+            occupancy.put("previousOccupied", previous);
+            occupancy.put("occupied", occupied);
+            occupancy.put("capacity", capacity);
+            occupancy.put("note", "Arrival from " + assignment.get("teamName"));
+            occupancy.put("recordedAt", now);
+            tx.set(SHELTERS, shelterId, shelter);
+            tx.set(OCCUPANCY_HISTORY, historyId, occupancy);
+
+            List<Object> history = new ArrayList<>(assignment.get("history") instanceof List<?> list ? list : List.of());
+            history.add(historyEntry("COMPLETED", now, actorId, actorName, delivered + " evacuees delivered to " + shelter.get("name")));
+            assignment.put("status", "COMPLETED");
+            assignment.put("evacueesDelivered", delivered);
+            assignment.put("arrivedAt", now);
+            assignment.put("completedAt", now);
+            assignment.put("history", history);
+            tx.set(TEAM_ASSIGNMENTS, id, assignment);
+            // Free the team only if it is still held by this assignment.
+            if (team != null && id.equals(team.get("currentAssignmentId"))) {
+                team = new LinkedHashMap<>(team);
+                team.put("status", "AVAILABLE");
+                team.put("currentAssignmentId", null);
+                team.put("updatedAt", now);
+                team.put("updatedBy", actorId);
+                tx.set(RESCUE_TEAMS, teamId, team);
+            }
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("assignment", assignment);
+            result.put("shelterId", shelterId);
+            result.put("shelterName", shelter.get("name"));
+            result.put("capacity", capacity);
+            result.put("previousOccupied", previous);
+            result.put("occupied", occupied);
+            result.put("previousAvailable", Math.max(0, capacity - previous));
+            result.put("available", Math.max(0, capacity - occupied));
+            return result;
+        });
+    }
+
+    /** Moves an assignment and its team to the next status together, in one transaction. */
+    private Map<String, Object> advanceAssignment(String id, Set<String> allowedFrom, String next, String timestampField,
+                                                  String actorId, String actorName, String note, String conflictMessage) {
+        return store.transaction(tx -> {
+            Map<String, Object> assignment = requireRow(tx.get(TEAM_ASSIGNMENTS, id), "Team assignment");
+            String teamId = String.valueOf(assignment.get("teamId"));
+            Map<String, Object> team = tx.get(RESCUE_TEAMS, teamId);
+            String current = String.valueOf(assignment.get("status"));
+            if (!allowedFrom.contains(current))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, conflictMessage + " (this one is "
+                    + current.toLowerCase(Locale.ROOT).replace('_', ' ') + ").");
+
+            String now = now();
+            assignment = new LinkedHashMap<>(assignment);
+            List<Object> history = new ArrayList<>(assignment.get("history") instanceof List<?> list ? list : List.of());
+            history.add(historyEntry(next, now, actorId, actorName, note));
+            assignment.put("status", next);
+            assignment.put(timestampField, now);
+            assignment.put("history", history);
+            tx.set(TEAM_ASSIGNMENTS, id, assignment);
+            // The team follows the assignment only while it is still held by it.
+            if (team != null && id.equals(team.get("currentAssignmentId"))) {
+                team = new LinkedHashMap<>(team);
+                team.put("status", next);
+                team.put("updatedAt", now);
+                team.put("updatedBy", actorId);
+                tx.set(RESCUE_TEAMS, teamId, team);
+            }
+            return assignment;
+        });
+    }
+
     private static Map<String, Object> historyEntry(String status, String at, String by, String byName, String note) {
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("status", status);

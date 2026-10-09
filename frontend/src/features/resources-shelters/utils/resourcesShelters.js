@@ -226,10 +226,50 @@ export function canCancelAssignment(assignment) {
   return assignment?.status === 'ASSIGNED';
 }
 
+/** Assigned teams can be dispatched; a dispatch that failed to reach the team can be retried. */
+export function canDispatchAssignment(assignment) {
+  return ['ASSIGNED', 'COMM_FAILURE'].includes(assignment?.status);
+}
+
+export function canMarkResponding(assignment) {
+  return assignment?.status === 'DISPATCHED';
+}
+
 export function filterAssignments(rows, { query = '', status = 'All', district = 'All' } = {}) {
   const text = query.trim().toLowerCase();
   return rows.filter(row =>
     (!text || [row.id, row.teamName, row.shelterName, row.pickupLocation].some(value => String(value || '').toLowerCase().includes(text)))
     && (status === 'All' || row.status === status)
     && (district === 'All' || row.district === district));
+}
+
+/** Arrival can be recorded once a team is on its way (dispatched) or already on the ground (responding). */
+export function canRecordArrival(assignment) {
+  return ['DISPATCHED', 'RESPONDING'].includes(assignment?.status);
+}
+
+export function validateArrival(value) {
+  if (value === '' || value === null || value === undefined) return 'Enter the number of evacuees delivered.';
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0) return 'Evacuees delivered must be a whole number of 0 or more.';
+  return '';
+}
+
+/** Shelter occupancy before and after an arrival, e.g. 380 → 430 occupied and 120 → 70 available. */
+export function previewArrival(shelter, delivered) {
+  const capacity = Number(shelter.capacity || 0);
+  const occupied = Number(shelter.occupied || 0);
+  const after = occupied + Number(delivered || 0);
+  return {
+    before: { occupied, available: availableSpace(shelter) },
+    after: { occupied: after, available: Math.max(0, capacity - after) },
+    exceedsCapacity: after > capacity,
+    overBy: Math.max(0, after - capacity),
+  };
+}
+
+/** '1 person', '5 people'. */
+export function peopleLabel(count) {
+  const n = Number(count);
+  return `${n.toLocaleString()} ${n === 1 ? 'person' : 'people'}`;
 }
