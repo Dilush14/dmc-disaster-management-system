@@ -16,6 +16,8 @@ import static lk.dmc.repository.CoordinationStore.*;
 @Service
 public class CoordinationService {
     private static final Set<String> TERMINAL = Set.of("COMPLETED", "CANCELLED");
+    /** Team states owned by an assignment; availability cannot be changed by hand while in one of these. */
+    private static final Set<String> ON_ASSIGNMENT = Set.of("ASSIGNED", "DISPATCHED", "RESPONDING");
     private final CoordinationStore store;
     private final Clock clock;
 
@@ -237,6 +239,61 @@ public class CoordinationService {
         });
     }
 
+    // ---- Rescue teams ----
+
+    public List<Map<String, Object>> listTeams(String district, String status) {
+        return store.list(RESCUE_TEAMS).stream()
+            .filter(row -> matchesDistrict(row, district))
+            .filter(row -> status == null || status.isBlank() || status.equalsIgnoreCase(String.valueOf(row.get("status"))))
+            .sorted(Comparator.comparing(row -> String.valueOf(row.get("id"))))
+            .toList();
+    }
+
+    public Map<String, Object> getTeam(String id) {
+        return requireRow(RESCUE_TEAMS, id, "Rescue team");
+    }
+
+    public Map<String, Object> createTeam(TeamRequest request, String actorId) {
+        String id = newId("RT");
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", id);
+        applyTeam(row, request, actorId);
+        row.put("status", "AVAILABLE");
+        row.put("currentAssignmentId", null);
+        store.transaction(tx -> {
+            tx.set(RESCUE_TEAMS, id, row);
+            return null;
+        });
+        return row;
+    }
+
+    public Map<String, Object> updateTeam(String id, TeamRequest request, String actorId) {
+        return store.transaction(tx -> {
+            Map<String, Object> row = requireRow(tx.get(RESCUE_TEAMS, id), "Rescue team");
+            applyTeam(row, request, actorId);
+            tx.set(RESCUE_TEAMS, id, row);
+            return row;
+        });
+    }
+
+    /** Marks a team available or unavailable. Blocked while the team is on an assignment so dispatch state stays consistent. */
+    public Map<String, Object> setAvailability(String id, TeamAvailabilityRequest request, String actorId) {
+        return store.transaction(tx -> {
+            Map<String, Object> row = requireRow(tx.get(RESCUE_TEAMS, id), "Rescue team");
+            String current = String.valueOf(row.get("status"));
+            if (ON_ASSIGNMENT.contains(current))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, row.get("name") + " is currently "
+                    + current.toLowerCase(Locale.ROOT) + " and its availability cannot be changed until the assignment ends.");
+            if (current.equals(request.status()))
+                return row;
+            row.put("status", request.status());
+            row.put("updatedAt", now());
+            row.put("updatedBy", actorId);
+            tx.set(RESCUE_TEAMS, id, row);
+            return row;
+        });
+    }
+
     // ---- Dashboard ----
 
     public Map<String, Object> overview(String district) {
@@ -325,6 +382,18 @@ public class CoordinationService {
         row.put("available", request.available().longValue());
         row.put("lowStockThreshold", request.lowStockThreshold().longValue());
         row.put("updatedAt", now());
+    }
+
+    private void applyTeam(Map<String, Object> row, TeamRequest request, String actorId) {
+        row.put("name", request.name().trim());
+        row.put("agency", request.agency());
+        row.put("district", request.district().trim());
+        row.put("memberCount", request.memberCount().longValue());
+        row.put("leader", request.leader().trim());
+        row.put("contactNumber", request.contactNumber().trim());
+        row.put("capabilities", request.capabilities().stream().distinct().toList());
+        row.put("updatedAt", now());
+        row.put("updatedBy", actorId);
     }
 
     private static void validateStock(ResourceRequest request) {

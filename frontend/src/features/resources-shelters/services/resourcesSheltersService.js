@@ -49,3 +49,10 @@ export const listDistributions = (district, options) => request(`/distributions$
 export const allocateResources = body => request('/distributions', { method: 'POST', body });
 export const updateDistributionStatus = (id, status) =>
   request(`/distributions/${encodeURIComponent(id)}/status`, { method: 'PATCH', body: { status } });
+
+export const listTeams = options => request('/teams', options);
+export const getTeam = (id, options) => request(`/teams/${encodeURIComponent(id)}`, options);
+export const createTeam = body => request('/teams', { method: 'POST', body });
+export const updateTeam = (id, body) => request(`/teams/${encodeURIComponent(id)}`, { method: 'PUT', body });
+export const setTeamAvailability = (id, status) =>
+  request(`/teams/${encodeURIComponent(id)}/availability`, { method: 'PATCH', body: { status } });

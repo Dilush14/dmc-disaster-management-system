@@ -117,6 +117,53 @@ class CoordinationServiceTests {
         assertStatus(HttpStatus.NOT_FOUND, () -> service.shelter("SH-NOPE"));
     }
 
+    @Test
+    void teamsAreFilteredByDistrictAndStatus() {
+        assertEquals(8, service.listTeams(null, null).size());
+        var colomboAvailable = service.listTeams("Colombo", "AVAILABLE");
+        assertTrue(colomboAvailable.size() >= 3);
+        assertTrue(colomboAvailable.stream().allMatch(row -> "Colombo".equals(row.get("district")) && "AVAILABLE".equals(row.get("status"))));
+        assertEquals("RT-004", service.listTeams("colombo", "dispatched").get(0).get("id"));
+    }
+
+    @Test
+    void createdTeamIsAvailableAndRecordsActor() {
+        var team = service.createTeam(teamRequest("Galle Navy Rescue"), "officer-1");
+        assertEquals("AVAILABLE", team.get("status"));
+        assertEquals("officer-1", team.get("updatedBy"));
+        assertEquals(List.of("Boat Rescue", "First Aid"), service.getTeam(String.valueOf(team.get("id"))).get("capabilities"));
+    }
+
+    @Test
+    void updatingTeamKeepsStatus() {
+        var updated = service.updateTeam("RT-004", teamRequest("Red Cross First Aid Team"), "officer-1");
+        assertEquals("DISPATCHED", updated.get("status"));
+        assertEquals(4L, updated.get("memberCount"));
+    }
+
+    @Test
+    void availabilityCanBeToggledWhenNotOnAssignment() {
+        var team = service.setAvailability("RT-001", new TeamAvailabilityRequest("UNAVAILABLE"), "officer-1");
+        assertEquals("UNAVAILABLE", team.get("status"));
+        assertEquals("UNAVAILABLE", store.find(CoordinationStore.RESCUE_TEAMS, "RT-001").get("status"));
+    }
+
+    @Test
+    void availabilityIsBlockedWhileDispatched() {
+        assertStatus(HttpStatus.CONFLICT, () -> service.setAvailability("RT-004", new TeamAvailabilityRequest("AVAILABLE"), "officer-1"));
+        assertEquals("DISPATCHED", store.find(CoordinationStore.RESCUE_TEAMS, "RT-004").get("status"));
+    }
+
+    @Test
+    void unknownTeamIsNotFound() {
+        assertStatus(HttpStatus.NOT_FOUND, () -> service.getTeam("RT-NOPE"));
+        assertStatus(HttpStatus.NOT_FOUND, () -> service.setAvailability("RT-NOPE", new TeamAvailabilityRequest("AVAILABLE"), "officer-1"));
+    }
+
+    private static TeamRequest teamRequest(String name) {
+        return new TeamRequest(name, "Navy", "Galle", 4, "Lt. A. Perera", "077 123 0000", List.of("Boat Rescue", "First Aid", "Boat Rescue"));
+    }
+
     private static DistributionRequest request(String shelterId, int expectedPeople, DistributionRequest.Item... items) {
         return new DistributionRequest(List.of(items), shelterId, LocalDate.now().plusDays(1), "DMC Vehicle", "", expectedPeople);
     }

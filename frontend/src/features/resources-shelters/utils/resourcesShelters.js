@@ -150,3 +150,36 @@ export function describeResponse(response) {
   const areas = list.length <= 1 ? list[0] || 'Not specified' : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`;
   return { hazard, areas };
 }
+
+export const TEAM_AGENCIES = ['DMC', 'Sri Lanka Army', 'Navy', 'Police', 'Fire Service', 'Red Cross', 'NGO'];
+export const TEAM_CAPABILITIES = ['Boat Rescue', 'First Aid', 'Evacuation', 'Heavy Lifting'];
+export const TEAM_STATUSES = ['AVAILABLE', 'ASSIGNED', 'DISPATCHED', 'RESPONDING', 'UNAVAILABLE', 'COMM_FAILURE'];
+const ON_ASSIGNMENT = ['ASSIGNED', 'DISPATCHED', 'RESPONDING'];
+
+/** Availability is managed by dispatch while a team is on an assignment, so manual toggling is blocked (mirrors the backend 409). */
+export function canChangeAvailability(team) {
+  return !ON_ASSIGNMENT.includes(team?.status);
+}
+
+export function validateTeamForm(form) {
+  const errors = {};
+  if (!form.name?.trim()) errors.name = 'Team name is required.';
+  else if (form.name.trim().length > 120) errors.name = 'Team name must be 120 characters or fewer.';
+  if (!TEAM_AGENCIES.includes(form.agency)) errors.agency = 'Select an agency.';
+  if (!DISTRICTS.includes(form.district)) errors.district = 'Select a district.';
+  const members = Number(form.memberCount);
+  if (form.memberCount === '' || !Number.isInteger(members) || members < 1 || members > 500) errors.memberCount = 'Members must be a whole number from 1 to 500.';
+  if (!form.leader?.trim()) errors.leader = 'Team leader is required.';
+  if (!/^[0-9 +()-]{7,20}$/.test(form.contactNumber || '')) errors.contactNumber = 'Enter a valid phone number.';
+  if (!form.capabilities?.length) errors.capabilities = 'Select at least one capability.';
+  return errors;
+}
+
+export function filterTeams(teams, { query = '', district = 'All', agency = 'All', status = 'All' } = {}) {
+  const text = query.trim().toLowerCase();
+  return teams.filter(team =>
+    (!text || team.name.toLowerCase().includes(text) || team.leader.toLowerCase().includes(text) || team.id.toLowerCase().includes(text))
+    && (district === 'All' || team.district === district)
+    && (agency === 'All' || team.agency === agency)
+    && (status === 'All' || team.status === status));
+}

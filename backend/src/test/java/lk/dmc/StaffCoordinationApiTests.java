@@ -108,6 +108,43 @@ class StaffCoordinationApiTests {
         }
 
         @Test
+        void teamsAreListedAndFiltered() throws Exception {
+            mvc.perform(get("/api/staff/resources-shelters/teams").param("district", "Colombo").param("status", "AVAILABLE")
+                    .header("Authorization", "Bearer officer-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[0].id").value("RT-001"));
+        }
+
+        @Test
+        void teamIsCreatedWithValidation() throws Exception {
+            mvc.perform(post("/api/staff/resources-shelters/teams").header("Authorization", "Bearer officer-token")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"name\":\"\",\"agency\":\"Pirates\",\"district\":\"Galle\",\"memberCount\":0,"
+                        + "\"leader\":\"A\",\"contactNumber\":\"abc\",\"capabilities\":[]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.name").exists())
+                .andExpect(jsonPath("$.errors.agency").exists())
+                .andExpect(jsonPath("$.errors.memberCount").exists())
+                .andExpect(jsonPath("$.errors.contactNumber").exists());
+            mvc.perform(post("/api/staff/resources-shelters/teams").header("Authorization", "Bearer officer-token")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"name\":\"Galle Navy Rescue\",\"agency\":\"Navy\",\"district\":\"Galle\",\"memberCount\":6,"
+                        + "\"leader\":\"Lt. A. Perera\",\"contactNumber\":\"077 123 0000\",\"capabilities\":[\"Boat Rescue\"]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("AVAILABLE"))
+                .andExpect(jsonPath("$.updatedBy").value("officer-1"));
+        }
+
+        @Test
+        void availabilityIsBlockedWhileDispatched() throws Exception {
+            mvc.perform(patch("/api/staff/resources-shelters/teams/RT-004/availability").header("Authorization", "Bearer officer-token")
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"AVAILABLE\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("dispatched")));
+        }
+
+        @Test
         void overAllocationReturnsConflict() throws Exception {
             mvc.perform(post("/api/staff/resources-shelters/distributions").header("Authorization", "Bearer officer-token").contentType(MediaType.APPLICATION_JSON)
                     .content("{\"items\":[{\"resourceId\":\"RS-003\",\"quantity\":1000}],\"shelterId\":\"SH-002\","

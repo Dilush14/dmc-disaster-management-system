@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  availableSpace, checkShelterCapacity, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate,
+  availableSpace, canChangeAvailability, checkShelterCapacity, filterTeams, validateTeamForm, describeResponse, checkStock, filterShelters, occupancyBand, occupancyRate, paginate,
   validateAllocationDetails, validateOccupancy, validateResourceForm, validateResourceSelection, validateShelterForm,
 } from './resourcesShelters.js';
 
@@ -70,4 +70,32 @@ test('active response banner text', () => {
   assert.deepEqual(describeResponse({ hazardType: 'FLOOD', affectedAreas: ['Kelani River Basin', 'Kolonnawa'] }),
     { hazard: 'Flood', areas: 'Kelani River Basin and Kolonnawa' });
   assert.deepEqual(describeResponse({ hazardType: 'HIGH_WIND', affectedAreas: [] }), { hazard: 'High wind', areas: 'Not specified' });
+});
+
+const teams = [
+  { id: 'RT-001', name: 'DMC Colombo Rapid Response', leader: 'Mr. S. Rajapaksha', agency: 'DMC', district: 'Colombo', status: 'AVAILABLE' },
+  { id: 'RT-002', name: 'Navy Boat Rescue Unit 4', leader: 'Lt. K. Senanayake', agency: 'Navy', district: 'Colombo', status: 'AVAILABLE' },
+  { id: 'RT-004', name: 'Red Cross First Aid Team', leader: 'Ms. H. Mendis', agency: 'Red Cross', district: 'Colombo', status: 'DISPATCHED' },
+  { id: 'RT-005', name: 'Army Engineering Squad 2', leader: 'Capt. R. Abeysekara', agency: 'Sri Lanka Army', district: 'Gampaha', status: 'AVAILABLE' },
+];
+
+test('rescue teams filter by search, district, agency and status', () => {
+  assert.equal(filterTeams(teams, { district: 'Colombo', status: 'AVAILABLE' }).length, 2);
+  assert.deepEqual(filterTeams(teams, { agency: 'Navy' }).map(team => team.id), ['RT-002']);
+  assert.deepEqual(filterTeams(teams, { query: 'mendis' }).map(team => team.id), ['RT-004']);
+  assert.equal(filterTeams(teams).length, 4);
+});
+
+test('team form validation', () => {
+  const valid = { name: 'Galle Navy Rescue', agency: 'Navy', district: 'Galle', memberCount: '6', leader: 'Lt. A. Perera', contactNumber: '077 123 0000', capabilities: ['Boat Rescue'] };
+  assert.deepEqual(validateTeamForm(valid), {});
+  const errors = validateTeamForm({ name: ' ', agency: 'Pirates', district: 'Atlantis', memberCount: '0', leader: '', contactNumber: 'abc', capabilities: [] });
+  assert.deepEqual(Object.keys(errors).sort(), ['agency', 'capabilities', 'contactNumber', 'district', 'leader', 'memberCount', 'name']);
+  assert.ok(validateTeamForm({ ...valid, memberCount: '2.5' }).memberCount);
+});
+
+test('availability cannot change while a team is on assignment', () => {
+  assert.equal(canChangeAvailability({ status: 'AVAILABLE' }), true);
+  assert.equal(canChangeAvailability({ status: 'COMM_FAILURE' }), true);
+  for (const status of ['ASSIGNED', 'DISPATCHED', 'RESPONDING']) assert.equal(canChangeAvailability({ status }), false);
 });

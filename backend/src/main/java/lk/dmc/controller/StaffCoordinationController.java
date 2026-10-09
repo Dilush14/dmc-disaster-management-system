@@ -4,8 +4,10 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import lk.dmc.dto.*;
+import lk.dmc.security.PublicIdentity;
 import lk.dmc.service.CoordinationService;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -73,5 +75,28 @@ public class StaffCoordinationController {
     @PatchMapping("/distributions/{id}/status")
     public Map<String, Object> updateStatus(@PathVariable String id, @Valid @RequestBody DistributionStatusRequest request) {
         return coordination.updateDistributionStatus(id, request);
+    }
+    @GetMapping("/teams")
+    public List<Map<String, Object>> teams(@RequestParam(required = false) String district, @RequestParam(required = false) String status) {
+        return coordination.listTeams(district, status);
+    }
+    @GetMapping("/teams/{id}")
+    public Map<String, Object> team(@PathVariable String id) {
+        return coordination.getTeam(id);
+    }
+    @PostMapping("/teams")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Map<String, Object> createTeam(@Valid @RequestBody TeamRequest request, @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.createTeam(request, identity.id());
+    }
+    @PutMapping("/teams/{id}")
+    public Map<String, Object> updateTeam(@PathVariable String id, @Valid @RequestBody TeamRequest request,
+                                          @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.updateTeam(id, request, identity.id());
+    }
+    @PatchMapping("/teams/{id}/availability")
+    public Map<String, Object> setAvailability(@PathVariable String id, @Valid @RequestBody TeamAvailabilityRequest request,
+                                               @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.setAvailability(id, request, identity.id());
     }
 }

@@ -16,9 +16,18 @@ const badgeTones = {
   PENDING: 'bg-amber-50 text-amber-700 ring-amber-200',
   IN_TRANSIT: 'bg-blue-50 text-blue-700 ring-blue-200',
   Inactive: 'bg-slate-100 text-slate-600 ring-slate-200',
+  AVAILABLE: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  ASSIGNED: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+  DISPATCHED: 'bg-blue-50 text-blue-700 ring-blue-200',
+  RESPONDING: 'bg-violet-50 text-violet-700 ring-violet-200',
+  UNAVAILABLE: 'bg-slate-100 text-slate-600 ring-slate-200',
+  COMM_FAILURE: 'bg-rose-50 text-rose-700 ring-rose-200',
 };
 
-const statusLabels = { PENDING: 'Pending', IN_TRANSIT: 'In Transit', COMPLETED: 'Completed', CANCELLED: 'Cancelled' };
+const statusLabels = {
+  PENDING: 'Pending', IN_TRANSIT: 'In Transit', COMPLETED: 'Completed', CANCELLED: 'Cancelled',
+  AVAILABLE: 'Available', ASSIGNED: 'Assigned', DISPATCHED: 'Dispatched', RESPONDING: 'Responding', UNAVAILABLE: 'Unavailable', COMM_FAILURE: 'Comm Failure',
+};
 
 export function StatusBadge({ status }) {
   return (
@@ -46,6 +55,7 @@ const sections = [
   { to: '/staff/resources-shelters', label: 'Overview', end: true },
   { to: '/staff/resources-shelters/shelters', label: 'Shelters' },
   { to: '/staff/resources-shelters/resources', label: 'Resources' },
+  { to: '/staff/resources-shelters/teams', label: 'Rescue Teams' },
   { to: '/staff/resources-shelters/allocate', label: 'Allocate' },
   { to: '/staff/resources-shelters/distributions', label: 'Distribution History' },
   { to: '/staff/resources-shelters/alerts', label: 'Shortages & Alerts' },
