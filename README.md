@@ -21,6 +21,19 @@ cd backend
 
 Open http://localhost:5173/public. Backend health: http://localhost:8080/api/health. Applications can start with Firebase disabled, but protected operations require configured services. Both apps load their local environment files; restart after changes. Never commit credentials.
 
+## Mobile application
+
+The `mobile/` directory contains the Expo React Native application for Citizens and Community Volunteers. The existing `frontend/` remains the staff web portal for DMC and district officers.
+
+```powershell
+cd mobile
+Copy-Item .env.example .env
+# Fill the public Firebase client values in .env
+npm.cmd start
+```
+
+Use `http://10.0.2.2:8080` for the Android emulator or replace `EXPO_PUBLIC_API_URL` with the development machine's LAN address when using a physical device. The mobile app uses Firebase Auth and the existing public Spring Boot endpoints; backend secrets must never be copied into `mobile/.env`.
+
 ## Checks and documentation
 
 - Frontend: `npm.cmd test`, `npm.cmd run build`, `npm.cmd run test:e2e` (installed Edge).
