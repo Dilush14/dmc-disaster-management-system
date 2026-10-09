@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { DISTRICTS, FACILITIES, RESOURCE_CATEGORIES, SHELTER_TYPES, validateResourceForm, validateShelterForm } from '../utils/resourcesShelters';
-import { createResource, createShelter, updateResource, updateShelter } from '../services/resourcesSheltersService';
+import { DISTRICTS, FACILITIES, RESOURCE_CATEGORIES, SHELTER_TYPES, TEAM_AGENCIES, TEAM_CAPABILITIES, validateResourceForm, validateShelterForm, validateTeamForm } from '../utils/resourcesShelters';
+import { createResource, createShelter, createTeam, updateResource, updateShelter, updateTeam } from '../services/resourcesSheltersService';
 import { ErrorBanner, Field, inputClass, Modal, PrimaryButton, SecondaryButton } from './ui';
 
 function useSubmit(onSaved) {
@@ -125,6 +125,64 @@ export function ResourceFormDialog({ resource, onClose, onSaved }) {
         <Field label="Total Quantity" required error={fieldError('totalQuantity')}><input type="number" min="0" className={inputClass} value={form.totalQuantity} onChange={set('totalQuantity')} /></Field>
         <Field label="Available" required error={fieldError('available')}><input type="number" min="0" className={inputClass} value={form.available} onChange={set('available')} /></Field>
         <Field label="Low Stock Threshold" required error={fieldError('lowStockThreshold')}><input type="number" min="0" className={inputClass} value={form.lowStockThreshold} onChange={set('lowStockThreshold')} /></Field>
+      </div>
+    </Modal>
+  );
+}
+
+export function TeamFormDialog({ team, onClose, onSaved }) {
+  const [form, setForm] = useState(() => ({
+    name: team?.name || '',
+    agency: team?.agency || '',
+    district: team?.district || '',
+    memberCount: team?.memberCount ?? '',
+    leader: team?.leader || '',
+    contactNumber: team?.contactNumber || '',
+    capabilities: team?.capabilities || [],
+  }));
+  const [errors, setErrors] = useState({});
+  const { saving, error, serverErrors, submit } = useSubmit(onSaved);
+  const set = key => event => setForm(current => ({ ...current, [key]: event.target.value }));
+  const toggleCapability = capability => setForm(current => ({
+    ...current,
+    capabilities: current.capabilities.includes(capability) ? current.capabilities.filter(item => item !== capability) : [...current.capabilities, capability],
+  }));
+  const save = () => {
+    const found = validateTeamForm(form);
+    setErrors(found);
+    if (Object.keys(found).length) return;
+    const body = { ...form, memberCount: Number(form.memberCount) };
+    submit(() => (team ? updateTeam(team.id, body) : createTeam(body)));
+  };
+  const fieldError = key => errors[key] || serverErrors[key];
+
+  return (
+    <Modal
+      title={team ? 'Edit Rescue Team' : 'Register Rescue Team'}
+      onClose={onClose}
+      footer={<><SecondaryButton onClick={onClose}>Cancel</SecondaryButton><PrimaryButton disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save Team'}</PrimaryButton></>}
+    >
+      {error && <div className="mb-3"><ErrorBanner message={error} /></div>}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2"><Field label="Team Name" required error={fieldError('name')}><input className={inputClass} value={form.name} onChange={set('name')} /></Field></div>
+        <Field label="Agency" required error={fieldError('agency')}>
+          <select className={inputClass} value={form.agency} onChange={set('agency')}><option value="">Select agency</option>{TEAM_AGENCIES.map(item => <option key={item}>{item}</option>)}</select>
+        </Field>
+        <Field label="District" required error={fieldError('district')}>
+          <select className={inputClass} value={form.district} onChange={set('district')}><option value="">Select district</option>{DISTRICTS.map(item => <option key={item}>{item}</option>)}</select>
+        </Field>
+        <Field label="Team Leader" required error={fieldError('leader')}><input className={inputClass} value={form.leader} onChange={set('leader')} /></Field>
+        <Field label="Contact Number" required error={fieldError('contactNumber')}><input className={inputClass} value={form.contactNumber} onChange={set('contactNumber')} /></Field>
+        <Field label="Members" required error={fieldError('memberCount')}><input type="number" min="1" max="500" className={inputClass} value={form.memberCount} onChange={set('memberCount')} /></Field>
+        <fieldset className="sm:col-span-2">
+          <legend className="mb-1 text-sm font-semibold text-slate-700">Capabilities<span className="text-rose-600"> *</span></legend>
+          <div className="grid grid-cols-2 gap-1 text-sm text-slate-700">
+            {TEAM_CAPABILITIES.map(capability => (
+              <label key={capability} className="flex items-center gap-2"><input type="checkbox" checked={form.capabilities.includes(capability)} onChange={() => toggleCapability(capability)} />{capability}</label>
+            ))}
+          </div>
+          {fieldError('capabilities') && <span className="mt-1 block text-xs text-rose-600">{fieldError('capabilities')}</span>}
+        </fieldset>
       </div>
     </Modal>
   );

@@ -3,7 +3,7 @@ import { Plus, Search } from 'lucide-react';
 import { listResources } from '../services/resourcesSheltersService';
 import { filterResources, paginate, RESOURCE_CATEGORIES } from '../utils/resourcesShelters';
 import { ResourceFormDialog } from '../components/FormDialogs';
-import { Card, ErrorBanner, inputClass, Loading, PageHeader, Pagination, PrimaryButton, Select, StatusBadge, useAsync } from '../components/ui';
+import { Card, ErrorBanner, inputClass, Loading, Refreshing, PageHeader, Pagination, PrimaryButton, Select, StatusBadge, useAsync } from '../components/ui';
 
 const categoryTabs = ['All', ...RESOURCE_CATEGORIES];
 
@@ -24,6 +24,7 @@ export default function ResourceManagementPage() {
       />
       {error && <ErrorBanner message={`Resource information is unavailable. ${error}`} onRetry={reload} />}
       {loading && !resources && <Loading label="Loading resources…" />}
+      {loading && resources && <Refreshing />}
       {resources && (
         <Card>
           <div className="mb-4 flex flex-wrap gap-2">

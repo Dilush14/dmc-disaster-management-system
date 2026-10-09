@@ -6,6 +6,7 @@ import java.util.Map;
 import lk.dmc.dto.*;
 import lk.dmc.repository.CoordinationStore;
 import lk.dmc.repository.InMemoryCoordinationStore;
+import lk.dmc.support.RescueOperationFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,7 @@ class CoordinationServiceTests {
     void setUp() {
         store = new InMemoryCoordinationStore();
         seedOperationalFixtures();
+        RescueOperationFixtures.seed(store);
         service = new CoordinationService(store);
     }
 
@@ -107,8 +109,136 @@ class CoordinationServiceTests {
     }
 
     @Test
+    void activeResponsesAreFilteredByDistrictAndStatus() {
+        var colombo = service.activeResponses("Colombo");
+        assertEquals(1, colombo.size());
+        assertEquals("Colombo Flood Response", colombo.get(0).get("title"));
+        assertEquals(List.of("Kelani River Basin", "Kolonnawa"), colombo.get(0).get("affectedAreas"));
+        assertTrue(service.activeResponses("Kandy").isEmpty());
+        store.transaction(tx -> {
+            var row = tx.get(CoordinationStore.EMERGENCY_RESPONSES, "ER-001");
+            row.put("status", "CLOSED");
+            tx.set(CoordinationStore.EMERGENCY_RESPONSES, "ER-001", row);
+            return null;
+        });
+        assertTrue(service.activeResponses(null).isEmpty());
+    }
+
+    @Test
     void unknownShelterIsNotFound() {
         assertStatus(HttpStatus.NOT_FOUND, () -> service.shelter("SH-NOPE"));
+    }
+
+    @Test
+    void teamsAreFilteredByDistrictAndStatus() {
+        assertEquals(8, service.listTeams(null, null).size());
+        var colomboAvailable = service.listTeams("Colombo", "AVAILABLE");
+        assertTrue(colomboAvailable.size() >= 3);
+        assertTrue(colomboAvailable.stream().allMatch(row -> "Colombo".equals(row.get("district")) && "AVAILABLE".equals(row.get("status"))));
+        assertEquals("RT-004", service.listTeams("colombo", "dispatched").get(0).get("id"));
+    }
+
+    @Test
+    void createdTeamIsAvailableAndRecordsActor() {
+        var team = service.createTeam(teamRequest("Galle Navy Rescue"), "officer-1");
+        assertEquals("AVAILABLE", team.get("status"));
+        assertEquals("officer-1", team.get("updatedBy"));
+        assertEquals(List.of("Boat Rescue", "First Aid"), service.getTeam(String.valueOf(team.get("id"))).get("capabilities"));
+    }
+
+    @Test
+    void updatingTeamKeepsStatus() {
+        var updated = service.updateTeam("RT-004", teamRequest("Red Cross First Aid Team"), "officer-1");
+        assertEquals("DISPATCHED", updated.get("status"));
+        assertEquals(4L, updated.get("memberCount"));
+    }
+
+    @Test
+    void availabilityCanBeToggledWhenNotOnAssignment() {
+        var team = service.setAvailability("RT-001", new TeamAvailabilityRequest("UNAVAILABLE"), "officer-1");
+        assertEquals("UNAVAILABLE", team.get("status"));
+        assertEquals("UNAVAILABLE", store.find(CoordinationStore.RESCUE_TEAMS, "RT-001").get("status"));
+    }
+
+    @Test
+    void availabilityIsBlockedWhileDispatched() {
+        assertStatus(HttpStatus.CONFLICT, () -> service.setAvailability("RT-004", new TeamAvailabilityRequest("AVAILABLE"), "officer-1"));
+        assertEquals("DISPATCHED", store.find(CoordinationStore.RESCUE_TEAMS, "RT-004").get("status"));
+    }
+
+    @Test
+    void unknownTeamIsNotFound() {
+        assertStatus(HttpStatus.NOT_FOUND, () -> service.getTeam("RT-NOPE"));
+        assertStatus(HttpStatus.NOT_FOUND, () -> service.setAvailability("RT-NOPE", new TeamAvailabilityRequest("AVAILABLE"), "officer-1"));
+    }
+
+    @Test
+    void assigningTeamMarksItAssignedAndRecordsAssignment() {
+        var assignment = service.assignTeam(assign("RT-001", "SH-009", 50), "officer-1");
+        String id = String.valueOf(assignment.get("id"));
+        assertTrue(id.startsWith("TA-"));
+        assertEquals("ASSIGNED", assignment.get("status"));
+        assertEquals("Colombo Community Centre", assignment.get("shelterName"));
+        assertEquals("officer-1", assignment.get("assignedBy"));
+        assertEquals(1, ((List<?>) assignment.get("history")).size());
+        var team = store.find(CoordinationStore.RESCUE_TEAMS, "RT-001");
+        assertEquals("ASSIGNED", team.get("status"));
+        assertEquals(id, team.get("currentAssignmentId"));
+        assertEquals(id, service.listAssignments(null).get(0).get("id"));
+    }
+
+    @Test
+    void assignmentHistoryRecordsOfficerName() {
+        var assignment = service.assignTeam(assign("RT-001", "SH-009", 50), "officer-1", "Mohammed Hamza");
+        var cancelled = service.cancelAssignment(String.valueOf(assignment.get("id")), "officer-1", "Mohammed Hamza");
+        var history = (List<?>) cancelled.get("history");
+        assertEquals(2, history.size());
+        for (Object entry : history) {
+            assertEquals("officer-1", ((Map<?, ?>) entry).get("by"));
+            assertEquals("Mohammed Hamza", ((Map<?, ?>) entry).get("byName"));
+        }
+    }
+
+    @Test
+    void insufficientCapacityIsRejectedAndNothingSaved() {
+        // Kalutara Vidyalaya: 20 places left.
+        var error = assertThrows(ResponseStatusException.class, () -> service.assignTeam(assign("RT-001", "SH-003", 21), "officer-1"));
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().startsWith("Insufficient capacity"));
+        assertEquals("AVAILABLE", store.find(CoordinationStore.RESCUE_TEAMS, "RT-001").get("status"));
+        assertTrue(store.list(CoordinationStore.TEAM_ASSIGNMENTS).isEmpty());
+        assertStatus(HttpStatus.CONFLICT, () -> service.assignTeam(assign("RT-001", "SH-010", 1), "officer-1"));
+    }
+
+    @Test
+    void unavailableTeamCannotBeAssigned() {
+        var error = assertThrows(ResponseStatusException.class, () -> service.assignTeam(assign("RT-004", "SH-009", 10), "officer-1"));
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().startsWith("Team is no longer available"));
+        service.assignTeam(assign("RT-001", "SH-009", 10), "officer-1");
+        assertStatus(HttpStatus.CONFLICT, () -> service.assignTeam(assign("RT-001", "SH-001", 10), "officer-2"));
+        assertEquals(1, store.list(CoordinationStore.TEAM_ASSIGNMENTS).size());
+    }
+
+    @Test
+    void cancellingAssignmentFreesTeam() {
+        String id = String.valueOf(service.assignTeam(assign("RT-002", "SH-009", 10), "officer-1").get("id"));
+        var cancelled = service.cancelAssignment(id, "officer-1");
+        assertEquals("CANCELLED", cancelled.get("status"));
+        assertEquals(2, ((List<?>) service.getAssignment(id).get("history")).size());
+        var team = store.find(CoordinationStore.RESCUE_TEAMS, "RT-002");
+        assertEquals("AVAILABLE", team.get("status"));
+        assertNull(team.get("currentAssignmentId"));
+        assertStatus(HttpStatus.CONFLICT, () -> service.cancelAssignment(id, "officer-1"));
+        assertStatus(HttpStatus.NOT_FOUND, () -> service.cancelAssignment("TA-NOPE", "officer-1"));
+    }
+
+    private static AssignTeamRequest assign(String teamId, String shelterId, int expected) {
+        return new AssignTeamRequest(teamId, shelterId, expected, "Kolonnawa junction", "");
+    }
+
+    private static TeamRequest teamRequest(String name) {
+        return new TeamRequest(name, "Navy", "Galle", 4, "Lt. A. Perera", "077 123 0000", List.of("Boat Rescue", "First Aid", "Boat Rescue"));
     }
 
     private static DistributionRequest request(String shelterId, int expectedPeople, DistributionRequest.Item... items) {
