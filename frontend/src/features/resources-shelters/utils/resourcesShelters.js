@@ -141,7 +141,7 @@ export function countBy(rows, key) {
   return rows.reduce((counts, row) => ({ ...counts, [row[key]]: (counts[row[key]] || 0) + 1 }), {});
 }
 
-const HAZARD_LABELS = { FLOOD: 'Flood', LANDSLIDE: 'Landslide', CYCLONE: 'Cyclone', DROUGHT: 'Drought', TSUNAMI: 'Tsunami' };
+export const HAZARD_LABELS = { FLOOD: 'Flood', LANDSLIDE: 'Landslide', CYCLONE: 'Cyclone', DROUGHT: 'Drought', TSUNAMI: 'Tsunami' };
 
 export function describeResponse(response) {
   const type = String(response?.hazardType || '');

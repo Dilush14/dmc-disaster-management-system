@@ -125,6 +125,21 @@ class CoordinationServiceTests {
     }
 
     @Test
+    void responseCanBeDeclaredAndClosed() {
+        var started = service.startResponse(new lk.dmc.dto.EmergencyResponseRequest("FLOOD", "Kandy", " Kandy Flood Response ",
+            List.of("Peradeniya", "Peradeniya")), "officer-1");
+        assertEquals("ACTIVE", started.get("status"));
+        assertEquals("Kandy Flood Response", started.get("title"));
+        assertEquals(List.of("Peradeniya"), started.get("affectedAreas"));
+        assertEquals(1, service.activeResponses("Kandy").size());
+
+        service.closeResponse(String.valueOf(started.get("id")), "officer-1");
+        assertTrue(service.activeResponses("Kandy").isEmpty());
+        assertStatus(HttpStatus.CONFLICT, () -> service.closeResponse(String.valueOf(started.get("id")), "officer-1"));
+        assertStatus(HttpStatus.NOT_FOUND, () -> service.closeResponse("ER-NOPE", "officer-1"));
+    }
+
+    @Test
     void unknownShelterIsNotFound() {
         assertStatus(HttpStatus.NOT_FOUND, () -> service.shelter("SH-NOPE"));
     }

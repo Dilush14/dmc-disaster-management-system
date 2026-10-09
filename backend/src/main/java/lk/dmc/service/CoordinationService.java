@@ -41,6 +41,40 @@ public class CoordinationService {
             .toList();
     }
 
+    /** Declares a new active emergency response; shelters, resources and teams are then coordinated under it. */
+    public Map<String, Object> startResponse(EmergencyResponseRequest request, String actorId) {
+        String id = newId("ER");
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", id);
+        row.put("hazardType", request.hazardType());
+        row.put("district", request.district().trim());
+        row.put("title", request.title().trim());
+        row.put("status", "ACTIVE");
+        row.put("startedAt", now());
+        row.put("startedBy", actorId);
+        row.put("affectedAreas", request.affectedAreas() == null ? List.of()
+            : request.affectedAreas().stream().map(String::trim).distinct().toList());
+        store.transaction(tx -> {
+            tx.set(EMERGENCY_RESPONSES, id, row);
+            return null;
+        });
+        return row;
+    }
+
+    /** Closes an active emergency response so it no longer appears as active. */
+    public Map<String, Object> closeResponse(String id, String actorId) {
+        return store.transaction(tx -> {
+            Map<String, Object> row = tx.get(EMERGENCY_RESPONSES, id);
+            if (row == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Emergency response not found.");
+            if (!"ACTIVE".equals(row.get("status"))) throw new ResponseStatusException(HttpStatus.CONFLICT, "Emergency response is already closed.");
+            row.put("status", "CLOSED");
+            row.put("closedAt", now());
+            row.put("closedBy", actorId);
+            tx.set(EMERGENCY_RESPONSES, id, row);
+            return row;
+        });
+    }
+
     // ---- Shelters ----
 
     public List<Map<String, Object>> shelters(String district) {

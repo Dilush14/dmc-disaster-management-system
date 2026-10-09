@@ -21,6 +21,16 @@ public class StaffCoordinationController {
     public List<Map<String, Object>> activeResponses(@RequestParam(required = false) String district) {
         return coordination.activeResponses(district);
     }
+    @PostMapping("/active-responses")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Map<String, Object> startResponse(@Valid @RequestBody EmergencyResponseRequest request,
+                                             @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.startResponse(request, identity.id());
+    }
+    @PostMapping("/active-responses/{id}/close")
+    public Map<String, Object> closeResponse(@PathVariable String id, @AuthenticationPrincipal PublicIdentity identity) {
+        return coordination.closeResponse(id, identity.id());
+    }
     @GetMapping("/overview")
     public Map<String, Object> overview(@RequestParam(required = false) String district) {
         return coordination.overview(district);
